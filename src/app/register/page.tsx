@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock, User, TrendingUp, ArrowRight, Check } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function RegisterPage() {
+function RegisterContent() {
   const router = useRouter();
   const { register, isAuthenticated } = useAuth();
 
@@ -24,10 +24,11 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
 
   // Redirect if already authenticated
-  if (isAuthenticated) {
-    router.push("/dashboard");
-    return null;
-  }
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, router]);
 
   const validateForm = () => {
     if (formData.password !== formData.confirmPassword) {
@@ -335,5 +336,17 @@ export default function RegisterPage() {
         </p>
       </motion.div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
+        <div className="spinner" />
+      </div>
+    }>
+      <RegisterContent />
+    </Suspense>
   );
 }

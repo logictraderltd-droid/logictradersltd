@@ -24,7 +24,7 @@ function CheckoutContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"stripe" | "mtn">("stripe");
 
-  console.log("Stripe Key Loaded:", process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.substring(0, 8) + "...");
+  console.log("Stripe Key Loaded:", process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ? (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.substring(0, 8) + "...") : "Not found");
 
   useEffect(() => {
     if (!productId) {

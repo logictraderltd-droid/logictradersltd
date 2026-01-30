@@ -8,7 +8,13 @@ export const createBrowserClient = () => {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables');
+    // During build time/SSR, environment variables might be missing.
+    // We return a mock client or null-safe proxy instead of throwing to prevent build failure.
+    console.warn('Supabase environment variables are missing. This is expected during some build phases.');
+    return createSSRBrowserClient(
+      supabaseUrl || 'https://placeholder.supabase.co',
+      supabaseKey || 'placeholder'
+    );
   }
 
   return createSSRBrowserClient(supabaseUrl, supabaseKey);

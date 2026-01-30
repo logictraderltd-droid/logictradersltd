@@ -37,7 +37,7 @@ export default function WatchLessonPage({
   params: { id: string; lessonId: string };
 }) {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [course, setCourse] = useState<Course | null>(null);
   const [currentLesson, setCurrentLesson] = useState<CourseLesson | null>(null);
   const [allLessons, setAllLessons] = useState<CourseLesson[]>([]);
@@ -49,12 +49,14 @@ export default function WatchLessonPage({
   const progressInterval = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
       router.push(`/login?redirect=/courses/${params.id}/watch/${params.lessonId}`);
       return;
     }
-    fetchLessonData();
-  }, [params.lessonId, user]);
+    if (isAuthenticated) {
+      fetchLessonData();
+    }
+  }, [params.lessonId, user, authLoading, isAuthenticated]);
 
   useEffect(() => {
     // Cleanup interval on unmount
@@ -285,11 +287,10 @@ export default function WatchLessonPage({
             <button
               onClick={() => prevLesson && goToLesson(prevLesson.id)}
               disabled={!prevLesson}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                prevLesson
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${prevLesson
                   ? "hover:bg-dark-800 text-white"
                   : "text-gray-600 cursor-not-allowed"
-              }`}
+                }`}
             >
               <ChevronLeft className="w-5 h-5 mr-2" />
               <span className="hidden sm:inline">Previous</span>
@@ -304,11 +305,10 @@ export default function WatchLessonPage({
             <button
               onClick={() => nextLesson && goToLesson(nextLesson.id)}
               disabled={!nextLesson}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                nextLesson
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${nextLesson
                   ? "hover:bg-dark-800 text-white"
                   : "text-gray-600 cursor-not-allowed"
-              }`}
+                }`}
             >
               <span className="hidden sm:inline">Next</span>
               <ChevronRight className="w-5 h-5 ml-2" />
@@ -355,13 +355,12 @@ export default function WatchLessonPage({
                         key={lesson.id}
                         onClick={() => canAccess && goToLesson(lesson.id)}
                         disabled={!canAccess}
-                        className={`w-full text-left p-3 rounded-lg transition-colors ${
-                          isCurrent
+                        className={`w-full text-left p-3 rounded-lg transition-colors ${isCurrent
                             ? "bg-gold-500/20 border border-gold-500/50"
                             : canAccess
-                            ? "hover:bg-dark-800 border border-transparent"
-                            : "opacity-50 cursor-not-allowed border border-transparent"
-                        }`}
+                              ? "hover:bg-dark-800 border border-transparent"
+                              : "opacity-50 cursor-not-allowed border border-transparent"
+                          }`}
                       >
                         <div className="flex items-start space-x-3">
                           <div className="mt-1">
@@ -375,9 +374,8 @@ export default function WatchLessonPage({
                           </div>
                           <div className="flex-1 min-w-0">
                             <p
-                              className={`font-medium text-sm truncate ${
-                                isCurrent ? "text-gold-400" : "text-white"
-                              }`}
+                              className={`font-medium text-sm truncate ${isCurrent ? "text-gold-400" : "text-white"
+                                }`}
                             >
                               {lesson.title}
                             </p>

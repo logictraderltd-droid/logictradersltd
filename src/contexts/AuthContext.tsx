@@ -1,20 +1,16 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
-import { createBrowserClient } from '@supabase/ssr';
+import { createBrowserClient } from "@/lib/supabase";
 import { SupabaseClient } from '@supabase/supabase-js';
 import { User, UserProfile } from "@/types";
-
-// Create a singleton Supabase client for browser
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 // Singleton instance to prevent multiple GoTrueClient instances
 let supabaseInstance: SupabaseClient | null = null;
 
 const getSupabaseClient = () => {
   if (!supabaseInstance) {
-    supabaseInstance = createBrowserClient(supabaseUrl, supabaseKey);
+    supabaseInstance = createBrowserClient();
   }
   return supabaseInstance;
 };
