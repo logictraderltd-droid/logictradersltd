@@ -63,11 +63,11 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
         .from("products")
         .select("*")
         .eq("id", params.id)
-        .eq("type", "bot")
+        .eq("product_type", "bot")
         .single();
 
       if (productError) throw productError;
-      setProduct(productData);
+      setProduct(productData ? { ...productData, type: productData.product_type ?? productData.type ?? "bot" } : null);
 
       // Fetch bot details
       const { data: botData, error: botError } = await supabase

@@ -22,9 +22,9 @@ export async function GET(
     // Verify product is a bot
     const { data: product, error: productError } = await supabase
       .from('products')
-      .select('id, name, type')
+      .select('id, name, product_type')
       .eq('id', productId)
-      .eq('type', 'bot')
+      .eq('product_type', 'bot')
       .single();
 
     if (productError || !product) {

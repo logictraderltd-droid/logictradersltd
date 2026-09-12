@@ -70,11 +70,11 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
         .from("products")
         .select("*")
         .eq("id", params.id)
-        .eq("type", "signal")
+        .eq("product_type", "signal")
         .single();
 
       if (productError) throw productError;
-      setProduct(productData);
+      setProduct(productData ? { ...productData, type: productData.product_type ?? productData.type ?? "signal" } : null);
 
       // Fetch signal plan details
       const { data: planData, error: planError } = await supabase

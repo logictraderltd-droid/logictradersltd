@@ -19,14 +19,19 @@ export default function SignalsPage() {
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .eq("type", "signal")
-        .eq("is_active", true)
-        .order("price", { ascending: true });
+        .eq("product_type", "signal")
+        .eq("is_active", true);
 
       if (error) {
         console.error("Error fetching signal plans:", error);
       } else {
-        setPlans(data || []);
+        setPlans((data || [])
+          .map((item: any) => ({
+            ...item,
+            price: Number(item.price ?? 0),
+            type: item.product_type ?? item.type ?? "signal",
+          }))
+          .sort((a: any, b: any) => Number(a.price ?? 0) - Number(b.price ?? 0)));
       }
       setIsLoading(false);
     };

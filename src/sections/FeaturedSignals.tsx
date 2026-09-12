@@ -46,13 +46,18 @@ export default function FeaturedSignals() {
         const { data, error } = await supabase
           .from("products")
           .select("*")
-          .eq("type", "signal")
+          .eq("product_type", "signal")
           .eq("is_active", true)
-          .order("price", { ascending: true })
           .limit(2);
 
         if (error) throw error;
-        setPlans(data || []);
+        setPlans((data || [])
+          .map((item: any) => ({
+            ...item,
+            price: Number(item.price ?? 0),
+            type: item.product_type ?? item.type ?? "signal",
+          }))
+          .sort((a: any, b: any) => Number(a.price ?? 0) - Number(b.price ?? 0)));
       } catch (error) {
         console.error("Unable to load featured signal plans:", error);
         setPlans([]);

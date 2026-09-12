@@ -65,11 +65,11 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         .from("products")
         .select("*")
         .eq("id", params.id)
-        .eq("type", "course")
+        .eq("product_type", "course")
         .single();
 
       if (courseError) throw courseError;
-      setCourse(courseData);
+      setCourse(courseData ? { ...courseData, type: courseData.product_type ?? courseData.type ?? "course" } : null);
 
       // Fetch course lessons
       const { data: lessonsData, error: lessonsError } = await supabase

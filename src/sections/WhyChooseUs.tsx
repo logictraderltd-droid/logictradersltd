@@ -59,7 +59,7 @@ const itemVariants = {
 
 export default function WhyChooseUs() {
   return (
-    <section className="py-20 bg-dark-900/30">
+    <section className="py-14 sm:py-20 bg-dark-900/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <motion.div
@@ -67,15 +67,15 @@ export default function WhyChooseUs() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-16"
+          className="text-center mb-10 sm:mb-16"
         >
           <span className="inline-block px-4 py-1 rounded-full bg-gold-500/10 text-gold-400 text-sm font-medium mb-4">
             Why Choose Us
           </span>
-          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">
             The <span className="gold-gradient-text">LOGICTRADERSLTD</span> Advantage
           </h2>
-          <p className="text-gray-400 max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base text-gray-400 max-w-2xl mx-auto">
             We combine cutting-edge technology with expert knowledge to deliver the best trading experience
           </p>
         </motion.div>
@@ -86,7 +86,7 @@ export default function WhyChooseUs() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
-          className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
+          className="grid gap-5 sm:gap-8 md:grid-cols-2 lg:grid-cols-3"
         >
           {features.map((feature, index) => {
             const Icon = feature.icon;
@@ -94,12 +94,12 @@ export default function WhyChooseUs() {
               <motion.div
                 key={index}
                 variants={itemVariants}
-                className="dark-card p-6 group hover:border-gold-500/50 transition-all"
+                className="dark-card p-4 sm:p-6 group hover:border-gold-500/50 transition-all"
               >
-                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-600/10 flex items-center justify-center mb-4 group-hover:from-gold-500/30 group-hover:to-gold-600/20 transition-all">
-                  <Icon className="w-7 h-7 text-gold-400" />
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-600/10 flex items-center justify-center mb-4 group-hover:from-gold-500/30 group-hover:to-gold-600/20 transition-all">
+                  <Icon className="w-5 h-5 sm:w-7 sm:h-7 text-gold-400" />
                 </div>
-                <h3 className="text-xl font-bold mb-2 group-hover:text-gold-400 transition-colors">
+                <h3 className="text-lg sm:text-xl font-bold mb-2 group-hover:text-gold-400 transition-colors">
                   {feature.title}
                 </h3>
                 <p className="text-gray-400 text-sm leading-relaxed">
@@ -116,23 +116,23 @@ export default function WhyChooseUs() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8"
+          className="mt-12 sm:mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8"
         >
           <div className="text-center">
-            <div className="text-3xl sm:text-4xl font-bold gold-gradient-text mb-2">10K+</div>
-            <div className="text-sm text-gray-500">Active Members</div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">10K+</div>
+            <div className="text-xs sm:text-sm text-gray-500">Active Members</div>
           </div>
           <div className="text-center">
-            <div className="text-3xl sm:text-4xl font-bold gold-gradient-text mb-2">95%</div>
-            <div className="text-sm text-gray-500">Signal Accuracy</div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">95%</div>
+            <div className="text-xs sm:text-sm text-gray-500">Signal Accuracy</div>
           </div>
           <div className="text-center">
-            <div className="text-3xl sm:text-4xl font-bold gold-gradient-text mb-2">50+</div>
-            <div className="text-sm text-gray-500">Countries Served</div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">50+</div>
+            <div className="text-xs sm:text-sm text-gray-500">Countries Served</div>
           </div>
           <div className="text-center">
-            <div className="text-3xl sm:text-4xl font-bold gold-gradient-text mb-2">4.9</div>
-            <div className="text-sm text-gray-500">User Rating</div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">4.9</div>
+            <div className="text-xs sm:text-sm text-gray-500">User Rating</div>
           </div>
         </motion.div>
       </div>

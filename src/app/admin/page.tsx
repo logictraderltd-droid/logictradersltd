@@ -112,7 +112,7 @@ export default function AdminDashboard() {
         setUsers(data || []);
       } else if (activeTab === "products") {
         const { data } = await supabase.from("products").select("*").order("created_at", { ascending: false });
-        setProducts(data || []);
+        setProducts((data || []).map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "course" })));
       } else if (activeTab === "orders") {
         const { data } = await supabase.from("orders").select(`*, product:products(name), user:users(email)`).order("created_at", { ascending: false });
         setOrders(data || []);

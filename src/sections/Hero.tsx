@@ -124,25 +124,25 @@ export default function Hero() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="social-marquee mb-10 min-h-[68px] w-full overflow-hidden rounded-2xl border border-gold-500/25 bg-dark-900/80 py-3 shadow-2xl shadow-black/20">
-          <div className="social-marquee-track flex w-max items-center gap-4 whitespace-nowrap">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+        <div className="social-marquee mb-8 sm:mb-10 min-h-[56px] sm:min-h-[68px] w-full overflow-hidden rounded-2xl border border-gold-500/25 bg-dark-900/80 py-2 sm:py-3 shadow-2xl shadow-black/20">
+          <div className="social-marquee-track flex w-max items-center gap-2 sm:gap-4 whitespace-nowrap">
             {[...socialLinks, ...socialLinks].map(({ label, icon: Icon, href }, index) => (
               <a
                 key={`${label}-${index}`}
                 href={href}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-3 rounded-full border border-white/10 bg-white/[.04] px-5 py-3 text-sm font-semibold text-gray-200 transition-colors hover:border-gold-500/60 hover:bg-gold-500/10 hover:text-gold-300"
+                className="flex items-center gap-2 sm:gap-3 rounded-full border border-white/10 bg-white/[.04] px-3 py-2 text-[11px] sm:px-5 sm:py-3 sm:text-sm font-semibold text-gray-200 transition-colors hover:border-gold-500/60 hover:bg-gold-500/10 hover:text-gold-300"
               >
-                <Icon className="h-5 w-5 text-gold-400" />
+                <Icon className="h-4 w-4 text-gold-400 sm:h-5 sm:w-5" />
                 <span>{label}</span>
                 <span className="text-gold-400">&gt;</span>
               </a>
             ))}
           </div>
         </div>
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12 items-center">
           {/* Left Column - Text */}
           <motion.div
             initial={{ opacity: 0, x: -50 }}
@@ -166,7 +166,7 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-6"
+              className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-[-0.04em] mb-5 sm:mb-6 max-w-[14ch] mx-auto lg:mx-0"
             >
               Master the Markets with{" "}
               <span className="gold-gradient-text">Logic & Precision</span>
@@ -177,7 +177,7 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
-              className="text-lg text-gray-400 mb-8 max-w-xl mx-auto lg:mx-0"
+              className="text-base sm:text-lg text-gray-400 mb-7 sm:mb-8 max-w-xl mx-auto lg:mx-0"
             >
               Unlock professional trading education, real-time signals, and powerful automation tools. 
               Join thousands of successful traders who trust LOGICTRADERSLTD.
@@ -188,18 +188,18 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 }}
-              className="flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-4 sm:space-y-0 sm:space-x-4"
+              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-3 sm:gap-4 w-full sm:w-auto"
             >
               <Link
                 href="/register"
-                className="gold-button flex items-center space-x-2 w-full sm:w-auto justify-center"
+                className="gold-button flex items-center space-x-2 w-full sm:w-auto justify-center px-5 sm:px-6"
               >
                 <span>Get Started</span>
                 <ArrowRight className="w-5 h-5" />
               </Link>
               <Link
                 href="/courses"
-                className="flex items-center space-x-2 px-6 py-3 rounded-lg border border-gold-500/50 text-gold-400 hover:bg-gold-500/10 transition-all w-full sm:w-auto justify-center"
+                className="flex items-center space-x-2 px-5 sm:px-6 py-3 rounded-lg border border-gold-500/50 text-gold-400 hover:bg-gold-500/10 transition-all w-full sm:w-auto justify-center"
               >
                 <Play className="w-5 h-5" />
                 <span>View Courses</span>
@@ -211,7 +211,7 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.6 }}
-              className="mt-12 grid grid-cols-3 gap-6"
+              className="mt-10 sm:mt-12 grid grid-cols-3 gap-3 sm:gap-6"
             >
               <div className="text-center lg:text-left">
                 <div className="text-2xl sm:text-3xl font-bold gold-gradient-text">10K+</div>
@@ -233,9 +233,9 @@ export default function Hero() {
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8 }}
-            className="flex items-center justify-center"
+            className="flex items-center justify-center w-full"
           >
-            <div className="relative w-full max-w-[380px]">
+            <div className="relative w-full max-w-[330px] sm:max-w-[380px] mx-auto">
               <div className="mb-3 flex items-center justify-between px-1">
                 <div className="flex items-center gap-2 text-sm text-gray-300"><Video className="h-4 w-4 text-gold-400" /><span>Market shorts</span></div>
                 <button type="button" onClick={() => setMuted((value) => !value)} className="rounded-md border border-white/10 bg-dark-900/80 p-2 text-gray-400 hover:text-white" aria-label={muted ? "Unmute videos" : "Mute videos"}>
@@ -244,9 +244,9 @@ export default function Hero() {
               </div>
 
               {isLoadingShorts ? (
-                <div className="flex h-[520px] items-center justify-center rounded-2xl border border-gold-500/20 bg-dark-900/80"><div className="spinner" /></div>
+                <div className="flex h-[420px] sm:h-[520px] items-center justify-center rounded-2xl border border-gold-500/20 bg-dark-900/80"><div className="spinner" /></div>
               ) : shorts.length > 0 ? (
-                <div className="shorts-feed h-[520px] snap-y snap-mandatory overflow-y-auto rounded-2xl border border-gold-500/20 bg-dark-900/80 shadow-2xl shadow-black/30">
+                <div className="shorts-feed h-[420px] sm:h-[520px] snap-y snap-mandatory overflow-y-auto rounded-2xl border border-gold-500/20 bg-dark-900/80 shadow-2xl shadow-black/30">
                   {shorts.map((short) => (
                     <article key={short.id} className="relative h-full min-h-full snap-start overflow-hidden bg-black">
                       {short.source === "youtube" ? (

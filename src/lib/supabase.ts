@@ -23,6 +23,15 @@ export function getSupabaseServiceRoleKey() {
   return serviceRoleKey;
 }
 
+export const normalizeProductRow = (product: any): Product => ({
+  ...product,
+  type: product?.product_type ?? product?.type ?? 'course',
+  product_type: product?.product_type ?? product?.type ?? 'course',
+});
+
+export const normalizeProductRows = (products: any[] = []): Product[] =>
+  products.map(normalizeProductRow);
+
 // Client-side Supabase client - safe to use in browser
 export const createBrowserClient = () => {
   const { supabaseUrl, supabaseKey } = getSupabaseConfig();
@@ -94,10 +103,10 @@ export const db = {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      return normalizeProductRows(data || []);
     },
 
-    async getById(id: string): Promise<Product | null> {
+    async getById(id: string): Promise<any | null> {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
         .from('products')
@@ -106,7 +115,7 @@ export const db = {
         .single();
 
       if (error) throw error;
-      return data;
+      return data ? normalizeProductRow(data) : null;
     },
 
     async getByType(type: string): Promise<Product[]> {
@@ -114,18 +123,18 @@ export const db = {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('type', type)
+        .eq('product_type', type)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      return normalizeProductRows(data || []);
     },
   },
 
   // Course operations
   courses: {
-    async getAll(): Promise<Course[]> {
+    async getAll(): Promise<any[]> {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
         .from('products')
@@ -133,15 +142,15 @@ export const db = {
           *,
           lessons:course_lessons(*)
         `)
-        .eq('type', 'course')
+        .eq('product_type', 'course')
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      return normalizeProductRows(data || []);
     },
 
-    async getById(id: string): Promise<Course | null> {
+    async getById(id: string): Promise<any | null> {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
         .from('products')
@@ -150,11 +159,11 @@ export const db = {
           lessons:course_lessons(*)
         `)
         .eq('id', id)
-        .eq('type', 'course')
+        .eq('product_type', 'course')
         .single();
 
       if (error) throw error;
-      return data;
+      return data ? (normalizeProductRow(data) as unknown as Course) : null;
     },
 
     async getLessons(courseId: string): Promise<CourseLesson[]> {
@@ -172,17 +181,16 @@ export const db = {
 
   // Signal operations
   signals: {
-    async getPlans(): Promise<SignalPlan[]> {
+    async getPlans(): Promise<any[]> {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('type', 'signal')
-        .eq('is_active', true)
-        .order('price', { ascending: true });
+        .eq('product_type', 'signal')
+        .eq('is_active', true);
 
       if (error) throw error;
-      return data || [];
+      return (normalizeProductRows(data || []) as any[]).sort((a: any, b: any) => Number(a.price ?? 0) - Number(b.price ?? 0));
     },
 
     async getRecent(limit: number = 10): Promise<TradingSignal[]> {
@@ -212,17 +220,17 @@ export const db = {
 
   // Bot operations
   bots: {
-    async getAll(): Promise<TradingBot[]> {
+    async getAll(): Promise<any[]> {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('type', 'bot')
+        .eq('product_type', 'bot')
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      return normalizeProductRows(data || []);
     },
   },
 

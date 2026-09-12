@@ -21,14 +21,14 @@ export default function CoursesPage() {
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .eq("type", "course")
+        .eq("product_type", "course")
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error fetching courses:", error);
       } else {
-        setCourses(data || []);
+        setCourses((data || []).map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "course" })));
       }
       setIsLoading(false);
     };
