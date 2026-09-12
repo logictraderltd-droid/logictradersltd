@@ -166,7 +166,7 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-[-0.04em] mb-5 sm:mb-6 max-w-[14ch] mx-auto lg:mx-0"
+              className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.05] tracking-[-0.04em] mb-4 sm:mb-6 max-w-[11ch] sm:max-w-[14ch] mx-auto lg:mx-0"
             >
               Master the Markets with{" "}
               <span className="gold-gradient-text">Logic & Precision</span>
@@ -177,9 +177,9 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
-              className="text-base sm:text-lg text-gray-400 mb-7 sm:mb-8 max-w-xl mx-auto lg:mx-0"
+              className="text-sm sm:text-base lg:text-lg text-gray-400 mb-6 sm:mb-8 max-w-[30rem] mx-auto lg:mx-0 leading-relaxed"
             >
-              Unlock professional trading education, real-time signals, and powerful automation tools. 
+              Unlock professional trading education, real-time signals, and powerful automation tools.
               Join thousands of successful traders who trust LOGICTRADERSLTD.
             </motion.p>
 
@@ -188,18 +188,18 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 }}
-              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-3 sm:gap-4 w-full sm:w-auto"
+              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-3 sm:gap-4 w-full max-w-md mx-auto lg:max-w-none lg:w-auto"
             >
               <Link
                 href="/register"
-                className="gold-button flex items-center space-x-2 w-full sm:w-auto justify-center px-5 sm:px-6"
+                className="gold-button flex items-center space-x-2 w-full sm:w-auto justify-center px-5 sm:px-6 min-h-[48px]"
               >
                 <span>Get Started</span>
                 <ArrowRight className="w-5 h-5" />
               </Link>
               <Link
                 href="/courses"
-                className="flex items-center space-x-2 px-5 sm:px-6 py-3 rounded-lg border border-gold-500/50 text-gold-400 hover:bg-gold-500/10 transition-all w-full sm:w-auto justify-center"
+                className="flex items-center space-x-2 px-5 sm:px-6 py-3 rounded-lg border border-gold-500/50 text-gold-400 hover:bg-gold-500/10 transition-all w-full sm:w-auto justify-center min-h-[48px]"
               >
                 <Play className="w-5 h-5" />
                 <span>View Courses</span>
