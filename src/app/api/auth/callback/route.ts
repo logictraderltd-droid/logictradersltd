@@ -6,6 +6,7 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || origin;
 
   if (code) {
     const cookieStore = cookies();
@@ -29,10 +30,9 @@ export async function GET(request: Request) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${appUrl}${next.startsWith('/') ? next : `/${next}`}`);
     }
   }
 
-  // Return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/login?error=auth_callback_error`);
+  return NextResponse.redirect(`${appUrl}/login?error=auth_callback_error`);
 }

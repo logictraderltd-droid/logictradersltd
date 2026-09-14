@@ -7,7 +7,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: '2024-06-20',
 });
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` :
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
 export async function POST(request: Request) {
     console.log("💳 Creating Session with Key:", process.env.STRIPE_SECRET_KEY?.substring(0, 8) + "...");
