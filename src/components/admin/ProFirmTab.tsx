@@ -15,6 +15,7 @@ import {
   Video,
   X,
 } from "lucide-react";
+import { createBrowserClient } from "@/lib/supabase";
 
 type ProFirmMediaType = "photo" | "video";
 
@@ -32,7 +33,7 @@ export interface ProFirmContent {
   videos: ProFirmMediaItem[];
 }
 
-const STORAGE_KEY = "logictradersltd_pro_firm_content";
+const SUPABASE_KEY = "pro_firm_content";
 
 const defaultContent: ProFirmContent = {
   headline: "Pro Firm",
@@ -76,21 +77,32 @@ export function ProFirmTab() {
   const [draft, setDraft] = useState({ title: "", url: "", description: "" });
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        setContent({ ...defaultContent, ...JSON.parse(raw) });
+    const loadContent = async () => {
+      try {
+        const supabase = createBrowserClient();
+        const { data, error } = await supabase
+          .from("site_content")
+          .select("value")
+          .eq("key", SUPABASE_KEY)
+          .maybeSingle();
+
+        if (error && error.code !== "PGRST116") throw error;
+
+        if (data?.value) {
+          setContent({ ...defaultContent, ...data.value });
+        }
+      } catch (error) {
+        console.error("Failed to load Pro Firm content:", error);
       }
-    } catch (error) {
-      console.error("Failed to load Pro Firm content:", error);
-    }
+    };
+
+    void loadContent();
   }, []);
 
   const mediaList = useMemo(() => content[typeConfig[activeType].key] as ProFirmMediaItem[], [content, activeType]);
 
   const saveContent = (nextContent: ProFirmContent) => {
     setContent(nextContent);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextContent));
   };
 
   const addItem = () => {
@@ -143,10 +155,22 @@ export function ProFirmTab() {
     setNotification({ type: "success", message: "Item removed." });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsLoading(true);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(content));
+      const supabase = createBrowserClient();
+      const { error } = await supabase
+        .from("site_content")
+        .upsert(
+          {
+            key: SUPABASE_KEY,
+            value: content,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "key" }
+        );
+
+      if (error) throw error;
       setNotification({ type: "success", message: "Pro Firm content saved successfully." });
     } catch (error) {
       setNotification({ type: "error", message: "Something went wrong while saving." });

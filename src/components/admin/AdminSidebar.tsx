@@ -10,6 +10,7 @@ import {
     LogOut,
     X,
     Award,
+    Megaphone,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -28,6 +29,7 @@ const menuItems = [
     { id: "products", label: "Products", icon: Package },
     { id: "orders", label: "Orders", icon: ShoppingCart },
     { id: "signals", label: "Signals", icon: Bell },
+    { id: "marketing", label: "Marketing", icon: Megaphone },
     { id: "pro-firm", label: "Pro Firm", icon: Award },
     { id: "settings", label: "Settings", icon: Settings },
 ];

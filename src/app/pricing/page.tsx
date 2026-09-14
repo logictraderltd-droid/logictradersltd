@@ -65,14 +65,26 @@ export default function PricingPage() {
   const [selectedMedia, setSelectedMedia] = useState<ProFirmMediaItem | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        setContent({ ...defaultContent, ...JSON.parse(raw) });
+    const loadContent = async () => {
+      try {
+        const { createBrowserClient } = await import("@/lib/supabase");
+        const supabase = createBrowserClient();
+        const { data, error } = await supabase
+          .from("site_content")
+          .select("value")
+          .eq("key", "pro_firm_content")
+          .maybeSingle();
+
+        if (error && error.code !== "PGRST116") throw error;
+        if (data?.value) {
+          setContent({ ...defaultContent, ...data.value });
+        }
+      } catch (error) {
+        console.error("Failed to load Pro Firm content:", error);
       }
-    } catch (error) {
-      console.error("Failed to load Pro Firm content:", error);
-    }
+    };
+
+    void loadContent();
   }, []);
 
   const sections = useMemo(

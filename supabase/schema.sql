@@ -231,6 +231,17 @@ CREATE INDEX idx_signals_created_at ON signals(created_at);
 CREATE INDEX idx_course_lessons_course_id ON course_lessons(course_id);
 CREATE INDEX idx_course_lessons_order_index ON course_lessons(order_index);
 
+-- Site content for shared homepage/admin-managed content
+CREATE TABLE site_content (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  key TEXT NOT NULL UNIQUE,
+  value JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_site_content_key ON site_content(key);
+
 -- ============================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================
@@ -247,6 +258,7 @@ ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_access ENABLE ROW LEVEL SECURITY;
+ALTER TABLE site_content ENABLE ROW LEVEL SECURITY;
 
 -- Users policies
 CREATE POLICY "Users can view own data" ON users
@@ -370,6 +382,14 @@ CREATE POLICY "Admin can manage access" ON user_access
     EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
   );
 
+CREATE POLICY "Public can read site content" ON site_content
+  FOR SELECT USING (true);
+
+CREATE POLICY "Admin can manage site content" ON site_content
+  FOR ALL USING (
+    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+  );
+
 -- ============================================
 -- FUNCTIONS & TRIGGERS
 -- ============================================
@@ -403,6 +423,9 @@ CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON subscriptions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_user_access_updated_at BEFORE UPDATE ON user_access
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_site_content_updated_at BEFORE UPDATE ON site_content
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to grant access after successful payment

@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Play, Video, Volume2, VolumeX, Youtube, Instagram, Facebook, Send, Music2 } from "lucide-react";
+import { ArrowRight, Play, Video, Volume2, VolumeX, Youtube, Instagram, Facebook, Send, Music2, Globe } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 
 interface ShortVideo {
@@ -16,7 +16,14 @@ interface ShortVideo {
   source: "youtube" | "video";
 }
 
-const suppliedYoutubeShorts: ShortVideo[] = [
+interface StoredSocialLink {
+  id: string;
+  label: string;
+  href: string;
+  platform: "youtube" | "instagram" | "facebook" | "tiktok" | "telegram" | "custom";
+}
+
+const defaultShorts: ShortVideo[] = [
   {
     id: "youtube-short-IT47FNXAoKc",
     name: "Trading insight",
@@ -35,13 +42,24 @@ const suppliedYoutubeShorts: ShortVideo[] = [
   },
 ];
 
-const socialLinks = [
+const defaultSocialLinks = [
   { label: "YouTube", icon: Youtube, href: "https://www.youtube.com/@sam_elabigael" },
   { label: "Instagram", icon: Instagram, href: "https://www.instagram.com/sam_elabigael/" },
   { label: "Facebook", icon: Facebook, href: "https://www.facebook.com/sam_elabigael" },
   { label: "TikTok", icon: Music2, href: "https://www.tiktok.com/@sam_elabigael" },
   { label: "Telegram", icon: Send, href: "https://t.me/sam_elabigael" },
 ];
+
+const getSocialIcon = (platform: StoredSocialLink["platform"]) => {
+  switch (platform) {
+    case "youtube": return Youtube;
+    case "instagram": return Instagram;
+    case "facebook": return Facebook;
+    case "tiktok": return Music2;
+    case "telegram": return Send;
+    default: return Globe;
+  }
+};
 
 // Floating particle component
 const FloatingParticle = ({ delay = 0, x, y }: { delay?: number; x: string; y: string }) => (
@@ -62,11 +80,50 @@ const FloatingParticle = ({ delay = 0, x, y }: { delay?: number; x: string; y: s
 );
 
 export default function Hero() {
-  const [shorts, setShorts] = useState<ShortVideo[]>([]);
+  const [shorts, setShorts] = useState<ShortVideo[]>(defaultShorts);
+  const [socialLinks, setSocialLinks] = useState(defaultSocialLinks);
   const [isLoadingShorts, setIsLoadingShorts] = useState(true);
   const [muted, setMuted] = useState(true);
 
   useEffect(() => {
+    const loadMarketingContent = async () => {
+      try {
+        const supabase = createBrowserClient();
+        const { data, error } = await supabase
+          .from("site_content")
+          .select("value")
+          .eq("key", "marketing_content")
+          .maybeSingle();
+
+        if (error && error.code !== "PGRST116") throw error;
+
+        if (data?.value) {
+          const bannerData = data.value as { shorts?: ShortVideo[]; socialLinks?: Array<{ label: string; href: string; platform?: string }> };
+          if (Array.isArray(bannerData.shorts) && bannerData.shorts.length > 0) {
+            setShorts(bannerData.shorts.map((item: any) => ({
+              id: item.id,
+              name: item.name || item.title || "Market short",
+              description: item.description || "",
+              type: item.type || "short",
+              thumbnail_url: item.thumbnail_url,
+              video_url: item.video_url,
+              source: item.source || "youtube",
+            })));
+          }
+
+          if (Array.isArray(bannerData.socialLinks) && bannerData.socialLinks.length > 0) {
+            setSocialLinks(bannerData.socialLinks.map((link) => ({
+              label: link.label,
+              href: link.href,
+              icon: getSocialIcon((link.platform as StoredSocialLink["platform"]) || "custom"),
+            })));
+          }
+        }
+      } catch (error) {
+        console.error("Unable to load marketing content:", error);
+      }
+    };
+
     const loadShorts = async () => {
       try {
         const { data, error } = await createBrowserClient()
@@ -95,16 +152,18 @@ export default function Hero() {
           .filter((video) => Boolean(video.video_url))
           .slice(0, 6) as ShortVideo[];
 
-        setShorts([...suppliedYoutubeShorts, ...videos.filter((video) => !suppliedYoutubeShorts.some((short) => short.id === video.id))]);
+        if (videos.length > 0) {
+          setShorts((current) => [...current.filter((short) => !short.id.startsWith("product-")), ...videos.map((video) => ({ ...video, id: `product-${video.id}`, name: video.name || "Market short" }))]);
+        }
       } catch (error) {
         console.error("Unable to load homepage shorts:", error);
-        setShorts(suppliedYoutubeShorts);
       } finally {
         setIsLoadingShorts(false);
       }
     };
 
-    loadShorts();
+    void loadMarketingContent();
+    void loadShorts();
   }, []);
 
   return (
@@ -131,7 +190,7 @@ export default function Hero() {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
         <div className="social-marquee mb-8 sm:mb-10 min-h-[56px] sm:min-h-[68px] w-full overflow-hidden rounded-2xl border border-gold-500/25 bg-dark-900/80 py-2 sm:py-3 shadow-2xl shadow-black/20">
           <div className="social-marquee-track flex w-max items-center gap-2 sm:gap-4 whitespace-nowrap">
-            {[...socialLinks, ...socialLinks].map(({ label, icon: Icon, href }, index) => (
+            {([...socialLinks, ...socialLinks]).map(({ label, icon: Icon, href }, index) => (
               <a
                 key={`${label}-${index}`}
                 href={href}
