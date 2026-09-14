@@ -38,32 +38,8 @@ interface SocialItem {
 
 const SUPABASE_KEY = "marketing_content";
 
-const defaultShorts: ShortItem[] = [
-  {
-    id: "youtube-short-IT47FNXAoKc",
-    title: "Trading insight",
-    description: "Watch the latest LOGICTRADERSLTD short.",
-    type: "short",
-    video_url: "https://www.youtube.com/embed/IT47FNXAoKc?autoplay=1&mute=1&loop=1&playlist=IT47FNXAoKc&rel=0",
-    source: "youtube",
-  },
-  {
-    id: "youtube-short-HUBb2-Oxa84",
-    title: "Trading insight",
-    description: "Watch another LOGICTRADERSLTD short.",
-    type: "short",
-    video_url: "https://www.youtube.com/embed/HUBb2-Oxa84?autoplay=1&mute=1&loop=1&playlist=HUBb2-Oxa84&rel=0",
-    source: "youtube",
-  },
-];
-
-const defaultSocialLinks: SocialItem[] = [
-  { id: "yt", label: "YouTube", href: "https://www.youtube.com/@sam_elabigael", platform: "youtube" },
-  { id: "ig", label: "Instagram", href: "https://www.instagram.com/sam_elabigael/", platform: "instagram" },
-  { id: "fb", label: "Facebook", href: "https://www.facebook.com/sam_elabigael", platform: "facebook" },
-  { id: "tt", label: "TikTok", href: "https://www.tiktok.com/@sam_elabigael", platform: "tiktok" },
-  { id: "tg", label: "Telegram", href: "https://t.me/sam_elabigael", platform: "telegram" },
-];
+const defaultShorts: ShortItem[] = [];
+const defaultSocialLinks: SocialItem[] = [];
 
 const createId = () => Math.random().toString(36).slice(2, 10);
 

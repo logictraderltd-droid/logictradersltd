@@ -23,32 +23,8 @@ interface StoredSocialLink {
   platform: "youtube" | "instagram" | "facebook" | "tiktok" | "telegram" | "custom";
 }
 
-const defaultShorts: ShortVideo[] = [
-  {
-    id: "youtube-short-IT47FNXAoKc",
-    name: "Trading insight",
-    description: "Watch the latest LOGICTRADERSLTD short.",
-    type: "short",
-    video_url: "https://www.youtube.com/embed/IT47FNXAoKc?autoplay=1&mute=1&loop=1&playlist=IT47FNXAoKc&rel=0",
-    source: "youtube",
-  },
-  {
-    id: "youtube-short-HUBb2-Oxa84",
-    name: "Trading insight",
-    description: "Watch another LOGICTRADERSLTD short.",
-    type: "short",
-    video_url: "https://www.youtube.com/embed/HUBb2-Oxa84?autoplay=1&mute=1&loop=1&playlist=HUBb2-Oxa84&rel=0",
-    source: "youtube",
-  },
-];
-
-const defaultSocialLinks = [
-  { label: "YouTube", icon: Youtube, href: "https://www.youtube.com/@sam_elabigael" },
-  { label: "Instagram", icon: Instagram, href: "https://www.instagram.com/sam_elabigael/" },
-  { label: "Facebook", icon: Facebook, href: "https://www.facebook.com/sam_elabigael" },
-  { label: "TikTok", icon: Music2, href: "https://www.tiktok.com/@sam_elabigael" },
-  { label: "Telegram", icon: Send, href: "https://t.me/sam_elabigael" },
-];
+const defaultShorts: ShortVideo[] = [];
+const defaultSocialLinks: Array<{ label: string; icon: any; href: string }> = [];
 
 const getSocialIcon = (platform: StoredSocialLink["platform"]) => {
   switch (platform) {
@@ -113,7 +89,7 @@ export default function Hero() {
             })));
           } else {
             setHasCustomMarketing(false);
-            setShorts(defaultShorts);
+            setShorts([]);
           }
 
           if (Array.isArray(bannerData.socialLinks) && bannerData.socialLinks.length > 0) {
@@ -123,55 +99,24 @@ export default function Hero() {
               icon: getSocialIcon((link.platform as StoredSocialLink["platform"]) || "custom"),
             })));
           } else {
-            setSocialLinks(defaultSocialLinks);
+            setSocialLinks([]);
           }
+        } else {
+          setHasCustomMarketing(false);
+          setShorts([]);
+          setSocialLinks([]);
         }
       } catch (error) {
         console.error("Unable to load marketing content:", error);
-      }
-    };
-
-    const loadShorts = async () => {
-      try {
-        const { data, error } = await createBrowserClient()
-          .from("products")
-          .select("*")
-          .eq("is_active", true)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-
-        const allowedTypes = new Set(["course", "signal", "bot"]);
-        const videos = (data || [])
-          .filter((product) => {
-            const productType = (product.product_type ?? product.type ?? "").toString().toLowerCase();
-            return allowedTypes.has(productType);
-          })
-          .map((product) => ({
-            id: product.id,
-            name: product.name,
-            description: product.description,
-            type: (product.product_type ?? product.type ?? "course").toString(),
-            thumbnail_url: product.thumbnail_url,
-            video_url: product.metadata?.video_url,
-            source: product.metadata?.video_url?.includes("youtube.com") || product.metadata?.video_url?.includes("youtu.be") ? "youtube" : "video",
-          }))
-          .filter((video) => Boolean(video.video_url))
-          .slice(0, 6) as ShortVideo[];
-
-        if (!hasCustomMarketing && videos.length > 0) {
-          setShorts(videos.map((video) => ({ ...video, id: `product-${video.id}`, name: video.name || "Market short" })));
-        }
-      } catch (error) {
-        console.error("Unable to load homepage shorts:", error);
+        setShorts([]);
+        setSocialLinks([]);
       } finally {
         setIsLoadingShorts(false);
       }
     };
 
     void loadMarketingContent();
-    void loadShorts();
-  }, [hasCustomMarketing]);
+  }, []);
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
