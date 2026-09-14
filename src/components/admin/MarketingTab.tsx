@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CldUploadWidget } from "next-cloudinary";
 import {
   Check,
   Film,
@@ -65,6 +66,13 @@ const defaultSocialLinks: SocialItem[] = [
 ];
 
 const createId = () => Math.random().toString(36).slice(2, 10);
+
+const getUploadUrlFromResult = (result: any): string | null => {
+  if (!result) return null;
+  const nestedInfo = result?.info ?? result;
+  const secureUrl = nestedInfo?.secure_url || result?.secure_url || nestedInfo?.url || result?.url;
+  return secureUrl || null;
+};
 
 function getPlatformIcon(platform: SocialItem["platform"]) {
   switch (platform) {
@@ -213,6 +221,21 @@ export function MarketingTab() {
     });
   };
 
+  const handleUploadSuccess = (result: any) => {
+    const uploadedUrl = getUploadUrlFromResult(result);
+    if (!uploadedUrl) {
+      setNotification({ type: "error", message: "Upload completed but the video URL could not be read." });
+      return;
+    }
+
+    setShortDraft((prev) => ({
+      ...prev,
+      video_url: uploadedUrl,
+      source: uploadedUrl.includes("youtube.com") || uploadedUrl.includes("youtu.be") ? "youtube" : "video",
+    }));
+    setNotification({ type: "success", message: "Upload ready. Add the short to save it." });
+  };
+
   const handleSave = async () => {
     setIsLoading(true);
     try {
@@ -290,6 +313,25 @@ export function MarketingTab() {
                 className="w-full bg-dark-900 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50"
                 placeholder="https://youtube.com/embed/... or direct video URL"
               />
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-gray-400">or upload a short video</span>
+              <CldUploadWidget
+                uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"}
+                onSuccess={handleUploadSuccess}
+                options={{ sources: ["local", "url", "camera"], multiple: false, resourceType: "video" }}
+              >
+                {({ open }) => (
+                  <button
+                    type="button"
+                    onClick={() => open()}
+                    className="bg-dark-900 border border-dark-700 hover:border-gold-500/50 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                  >
+                    Upload video
+                  </button>
+                )}
+              </CldUploadWidget>
             </div>
 
             <div className="space-y-2">
