@@ -128,18 +128,40 @@ export function MarketingTab() {
 
   const persistContent = async (nextShorts: ShortItem[], nextLinks: SocialItem[]) => {
     const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("site_content")
-      .upsert(
-        {
-          key: SUPABASE_KEY,
-          value: { shorts: nextShorts, socialLinks: nextLinks },
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "key" }
-      );
+    const payload = {
+      key: SUPABASE_KEY,
+      value: { shorts: nextShorts, socialLinks: nextLinks },
+      updated_at: new Date().toISOString(),
+    };
 
-    if (error) throw error;
+    try {
+      const { data: existingRow, error: selectError } = await supabase
+        .from("site_content")
+        .select("id")
+        .eq("key", SUPABASE_KEY)
+        .maybeSingle();
+
+      if (selectError && selectError.code !== "PGRST116") {
+        throw selectError;
+      }
+
+      const upsertResult = existingRow
+        ? await supabase
+            .from("site_content")
+            .update(payload)
+            .eq("id", existingRow.id)
+            .select()
+        : await supabase
+            .from("site_content")
+            .insert(payload)
+            .select();
+
+      if (upsertResult.error) throw upsertResult.error;
+      return upsertResult.data;
+    } catch (error) {
+      console.error("Marketing save failed:", error);
+      throw error;
+    }
   };
 
   const saveShorts = (nextShorts: ShortItem[]) => {
@@ -241,8 +263,9 @@ export function MarketingTab() {
     try {
       await persistContent(shorts, socialLinks);
       setNotification({ type: "success", message: "Marketing content saved successfully." });
-    } catch {
-      setNotification({ type: "error", message: "Something went wrong while saving." });
+    } catch (error) {
+      console.error("Marketing save error:", error);
+      setNotification({ type: "error", message: "Something went wrong while saving. Check Supabase table permissions or row values." });
     } finally {
       setTimeout(() => setIsLoading(false), 500);
     }
