@@ -84,6 +84,7 @@ export default function Hero() {
   const [socialLinks, setSocialLinks] = useState(defaultSocialLinks);
   const [isLoadingShorts, setIsLoadingShorts] = useState(true);
   const [muted, setMuted] = useState(true);
+  const [hasCustomMarketing, setHasCustomMarketing] = useState(false);
 
   useEffect(() => {
     const loadMarketingContent = async () => {
@@ -100,6 +101,7 @@ export default function Hero() {
         if (data?.value) {
           const bannerData = data.value as { shorts?: ShortVideo[]; socialLinks?: Array<{ label: string; href: string; platform?: string }> };
           if (Array.isArray(bannerData.shorts) && bannerData.shorts.length > 0) {
+            setHasCustomMarketing(true);
             setShorts(bannerData.shorts.map((item: any) => ({
               id: item.id,
               name: item.name || item.title || "Market short",
@@ -109,6 +111,9 @@ export default function Hero() {
               video_url: item.video_url,
               source: item.source || "youtube",
             })));
+          } else {
+            setHasCustomMarketing(false);
+            setShorts(defaultShorts);
           }
 
           if (Array.isArray(bannerData.socialLinks) && bannerData.socialLinks.length > 0) {
@@ -117,6 +122,8 @@ export default function Hero() {
               href: link.href,
               icon: getSocialIcon((link.platform as StoredSocialLink["platform"]) || "custom"),
             })));
+          } else {
+            setSocialLinks(defaultSocialLinks);
           }
         }
       } catch (error) {
@@ -152,8 +159,8 @@ export default function Hero() {
           .filter((video) => Boolean(video.video_url))
           .slice(0, 6) as ShortVideo[];
 
-        if (videos.length > 0) {
-          setShorts((current) => [...current.filter((short) => !short.id.startsWith("product-")), ...videos.map((video) => ({ ...video, id: `product-${video.id}`, name: video.name || "Market short" }))]);
+        if (!hasCustomMarketing && videos.length > 0) {
+          setShorts(videos.map((video) => ({ ...video, id: `product-${video.id}`, name: video.name || "Market short" })));
         }
       } catch (error) {
         console.error("Unable to load homepage shorts:", error);
@@ -164,7 +171,7 @@ export default function Hero() {
 
     void loadMarketingContent();
     void loadShorts();
-  }, []);
+  }, [hasCustomMarketing]);
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
