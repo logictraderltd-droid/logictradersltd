@@ -8,7 +8,7 @@ import Footer from "@/components/Footer";
 
 const STORAGE_KEY = "logictradersltd_pro_firm_content";
 
-type ProFirmMediaType = "certificates" | "awards" | "photos" | "videos";
+type ProFirmMediaType = "photos" | "videos";
 
 interface ProFirmMediaItem {
   id: string;
@@ -20,24 +20,18 @@ interface ProFirmMediaItem {
 interface ProFirmContent {
   headline: string;
   subtitle: string;
-  certificates: ProFirmMediaItem[];
-  awards: ProFirmMediaItem[];
   photos: ProFirmMediaItem[];
   videos: ProFirmMediaItem[];
 }
 
 const defaultContent: ProFirmContent = {
   headline: "Pro Firm",
-  subtitle: "Credentials, achievements, and proof of performance from the team behind LOGICTRADERSLTD.",
-  certificates: [],
-  awards: [],
+  subtitle: "A visual showcase of our work, moments, and results from the team behind LOGICTRADERSLTD.",
   photos: [],
   videos: [],
 };
 
 const typeConfig: Record<ProFirmMediaType, { label: string; icon: any }> = {
-  certificates: { label: "Certificates", icon: FileBadge2 },
-  awards: { label: "Awards", icon: Award },
   photos: { label: "Photos", icon: ImageIcon },
   videos: { label: "Videos", icon: Video },
 };
@@ -68,6 +62,7 @@ const getVideoEmbedUrl = (url: string) => {
 
 export default function PricingPage() {
   const [content, setContent] = useState<ProFirmContent>(defaultContent);
+  const [selectedMedia, setSelectedMedia] = useState<ProFirmMediaItem | null>(null);
 
   useEffect(() => {
     try {
@@ -166,7 +161,12 @@ export default function PricingPage() {
                     const shouldRenderPdf = isPdfUrl(item.url);
 
                     return (
-                      <div key={item.id} className="group overflow-hidden rounded-2xl border border-dark-800 bg-dark-950/80 transition-all hover:border-gold-500/30 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(212,160,23,0.08)]">
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedMedia(item)}
+                        className="group overflow-hidden rounded-2xl border border-dark-800 bg-dark-950/80 text-left transition-all hover:border-gold-500/30 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(212,160,23,0.08)]"
+                      >
                         {shouldRenderVideo ? (
                           <div className="h-56 overflow-hidden bg-dark-950">
                             {mediaUrl && /youtube\.com|youtu\.be|vimeo\.com/i.test(item.url) ? (
@@ -195,7 +195,7 @@ export default function PricingPage() {
                           <h3 className="font-bold text-lg text-white">{item.title}</h3>
                           {item.description && <p className="text-sm text-gray-400 leading-relaxed">{item.description}</p>}
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -204,6 +204,48 @@ export default function PricingPage() {
           ))}
         </div>
       </section>
+
+      {selectedMedia && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setSelectedMedia(null)}
+        >
+          <div className="relative w-full max-w-6xl rounded-2xl border border-dark-700 bg-dark-950 p-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setSelectedMedia(null)}
+              className="absolute right-4 top-4 z-10 rounded-full bg-black/60 px-3 py-1 text-sm text-white hover:bg-black/80"
+            >
+              Close
+            </button>
+
+            <div className="max-h-[85vh] overflow-auto rounded-xl bg-black">
+              {isVideoUrl(selectedMedia.url) ? (
+                selectedMedia.url.includes("youtube.com") || selectedMedia.url.includes("youtu.be") || selectedMedia.url.includes("vimeo.com") ? (
+                  <iframe
+                    src={getVideoEmbedUrl(selectedMedia.url) || selectedMedia.url}
+                    title={selectedMedia.title}
+                    className="h-[70vh] w-full rounded-xl"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video src={selectedMedia.url} controls autoPlay className="h-[70vh] w-full object-contain" playsInline />
+                )
+              ) : isPdfUrl(selectedMedia.url) ? (
+                <iframe src={selectedMedia.url} title={selectedMedia.title} className="h-[70vh] w-full rounded-xl" />
+              ) : (
+                <img src={selectedMedia.url} alt={selectedMedia.title} className="max-h-[70vh] w-full rounded-xl object-contain" />
+              )}
+            </div>
+
+            <div className="p-4">
+              <h3 className="text-xl font-bold text-white">{selectedMedia.title}</h3>
+              {selectedMedia.description && <p className="mt-2 text-sm text-gray-400">{selectedMedia.description}</p>}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </main>

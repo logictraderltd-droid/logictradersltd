@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 
-type ProFirmMediaType = "certificate" | "award" | "photo" | "video";
+type ProFirmMediaType = "photo" | "video";
 
 export interface ProFirmMediaItem {
   id: string;
@@ -28,8 +28,6 @@ export interface ProFirmMediaItem {
 export interface ProFirmContent {
   headline: string;
   subtitle: string;
-  certificates: ProFirmMediaItem[];
-  awards: ProFirmMediaItem[];
   photos: ProFirmMediaItem[];
   videos: ProFirmMediaItem[];
 }
@@ -38,9 +36,7 @@ const STORAGE_KEY = "logictradersltd_pro_firm_content";
 
 const defaultContent: ProFirmContent = {
   headline: "Pro Firm",
-  subtitle: "Credentials, achievements, and proof of performance from the team behind LOGICTRADERSLTD.",
-  certificates: [],
-  awards: [],
+  subtitle: "A visual showcase of our work, results, and moments from the team behind LOGICTRADERSLTD.",
   photos: [],
   videos: [],
 };
@@ -48,12 +44,10 @@ const defaultContent: ProFirmContent = {
 type ProFirmTypeConfig = {
   label: string;
   icon: any;
-  key: "certificates" | "awards" | "photos" | "videos";
+  key: "photos" | "videos";
 };
 
 const typeConfig: Record<ProFirmMediaType, ProFirmTypeConfig> = {
-  certificate: { label: "Certificates", icon: FileBadge2, key: "certificates" },
-  award: { label: "Awards", icon: Award, key: "awards" },
   photo: { label: "Photos", icon: ImageIcon, key: "photos" },
   video: { label: "Videos", icon: Video, key: "videos" },
 };
@@ -67,11 +61,18 @@ const isImageUrl = (value: string) => {
 };
 const isPdfUrl = (value: string) => !value ? false : /(?:\.(pdf))(?:\?|$)/i.test(value) || /application\/pdf/i.test(value);
 
+const getUploadUrlFromResult = (result: any): string | null => {
+  if (!result) return null;
+  const nestedInfo = result?.info ?? result;
+  const secureUrl = nestedInfo?.secure_url || result?.secure_url || nestedInfo?.url || result?.url;
+  return secureUrl || null;
+};
+
 export function ProFirmTab() {
   const [content, setContent] = useState<ProFirmContent>(defaultContent);
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [activeType, setActiveType] = useState<ProFirmMediaType>("certificate");
+  const [activeType, setActiveType] = useState<ProFirmMediaType>("photo");
   const [draft, setDraft] = useState({ title: "", url: "", description: "" });
 
   useEffect(() => {
@@ -93,7 +94,8 @@ export function ProFirmTab() {
   };
 
   const addItem = () => {
-    if (!draft.title.trim() || !draft.url.trim()) {
+    const finalUrl = draft.url.trim();
+    if (!draft.title.trim() || !finalUrl) {
       setNotification({ type: "error", message: "Please add a title and a valid URL or upload." });
       return;
     }
@@ -107,7 +109,7 @@ export function ProFirmTab() {
         {
           id: createId(),
           title: draft.title.trim(),
-          url: draft.url.trim(),
+          url: finalUrl,
           description: draft.description.trim(),
         },
       ],
@@ -116,6 +118,17 @@ export function ProFirmTab() {
     saveContent(nextContent);
     setDraft({ title: "", url: "", description: "" });
     setNotification({ type: "success", message: `${typeConfig[activeType].label} added successfully.` });
+  };
+
+  const handleUploadSuccess = (result: any) => {
+    const uploadedUrl = getUploadUrlFromResult(result);
+    if (!uploadedUrl) {
+      setNotification({ type: "error", message: "Upload completed but the image URL could not be read." });
+      return;
+    }
+
+    setDraft((prev) => ({ ...prev, url: uploadedUrl }));
+    setNotification({ type: "success", message: "Upload ready. Click Add item to save it to the gallery." });
   };
 
   const removeItem = (itemId: string) => {
@@ -147,7 +160,7 @@ export function ProFirmTab() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white">Pro Firm</h2>
-          <p className="text-gray-400 mt-1">Manage certificates, awards, photos, and videos shown on the public Pro Firm page.</p>
+          <p className="text-gray-400 mt-1">Manage the photo and video gallery shown on the public Pro Firm page.</p>
         </div>
         <button
           onClick={handleSave}
@@ -187,7 +200,7 @@ export function ProFirmTab() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {(Object.entries(typeConfig) as [ProFirmMediaType, ProFirmTypeConfig][]).map(([key, config]) => {
             const Icon = config.icon;
             const count = (content[config.key] || []).length;
@@ -238,12 +251,8 @@ export function ProFirmTab() {
                 />
                 <CldUploadWidget
                   uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"}
-                  onSuccess={(result: any) => {
-                    const secureUrl = result?.info?.secure_url;
-                    if (secureUrl) {
-                      setDraft((prev) => ({ ...prev, url: secureUrl }));
-                    }
-                  }}
+                  onSuccess={handleUploadSuccess}
+                  onError={() => setNotification({ type: "error", message: "Upload failed. Please try again." })}
                 >
                   {({ open }) => (
                     <button
