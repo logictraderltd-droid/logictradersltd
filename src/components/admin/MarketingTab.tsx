@@ -62,8 +62,8 @@ function getPlatformIcon(platform: SocialItem["platform"]) {
 }
 
 export function MarketingTab() {
-  const [shorts, setShorts] = useState<ShortItem[]>(defaultShorts);
-  const [socialLinks, setSocialLinks] = useState<SocialItem[]>(defaultSocialLinks);
+  const [shorts, setShorts] = useState<ShortItem[]>([]);
+  const [socialLinks, setSocialLinks] = useState<SocialItem[]>([]);
   const [shortDraft, setShortDraft] = useState({
     title: "",
     description: "",
@@ -237,7 +237,9 @@ export function MarketingTab() {
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      await persistContent(shorts, socialLinks);
+      const cleanShorts = Array.isArray(shorts) ? shorts : [];
+      const cleanLinks = Array.isArray(socialLinks) ? socialLinks : [];
+      await persistContent(cleanShorts, cleanLinks);
       setNotification({ type: "success", message: "Marketing content saved successfully." });
     } catch (error) {
       console.error("Marketing save error:", error);
