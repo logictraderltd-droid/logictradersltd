@@ -46,12 +46,16 @@ export default function FeaturedSignals() {
         const { data, error } = await supabase
           .from("products")
           .select("*")
-          .eq("product_type", "signal")
           .eq("is_active", true)
-          .limit(2);
+          .order("created_at", { ascending: false });
 
         if (error) throw error;
-        setPlans((data || [])
+
+        const signalItems = (data || [])
+          .filter((item: any) => (item.product_type ?? item.type ?? "").toString().toLowerCase() === "signal")
+          .slice(0, 2);
+
+        setPlans(signalItems
           .map((item: any) => ({
             ...item,
             price: Number(item.price ?? 0),

@@ -10,7 +10,7 @@ const navLinks = [
   { label: "Courses", href: "/courses" },
   { label: "Signals", href: "/signals" },
   { label: "Bots", href: "/bots" },
-  { label: "Pricing", href: "/pricing" },
+  { label: "Pro Firm", href: "/pricing" },
 ];
 
 const authLinks = [

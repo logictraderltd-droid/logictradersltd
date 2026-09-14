@@ -1,210 +1,207 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, BookOpen, Bell, Bot } from "lucide-react";
+import { Award, FileBadge2, Image as ImageIcon, Video, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
-const pricingTiers = [
-  {
-    name: "Starter",
-    description: "Perfect for beginners",
-    price: "Free",
-    period: "",
-    icon: BookOpen,
-    features: [
-      "Access to free courses",
-      "Community forum access",
-      "Basic market updates",
-      "Email support",
-    ],
-    cta: "Get Started",
-    href: "/register",
-    highlighted: false,
-  },
-  {
-    name: "Pro Trader",
-    description: "For serious traders",
-    price: "$149",
-    period: "/month",
-    icon: Bell,
-    features: [
-      "All Starter features",
-      "Premium signal subscription",
-      "Advanced courses access",
-      "Priority support",
-      "Weekly market analysis",
-    ],
-    cta: "Subscribe Now",
-    href: "/signals",
-    highlighted: true,
-  },
-  {
-    name: "Elite",
-    description: "Complete trading suite",
-    price: "$499",
-    period: "",
-    icon: Bot,
-    features: [
-      "All Pro Trader features",
-      "Trading bot license",
-      "1-on-1 mentorship",
-      "Custom strategies",
-      "Lifetime updates",
-    ],
-    cta: "Go Elite",
-    href: "/bots",
-    highlighted: false,
-  },
-];
+const STORAGE_KEY = "logictradersltd_pro_firm_content";
+
+type ProFirmMediaType = "certificates" | "awards" | "photos" | "videos";
+
+interface ProFirmMediaItem {
+  id: string;
+  title: string;
+  url: string;
+  description?: string;
+}
+
+interface ProFirmContent {
+  headline: string;
+  subtitle: string;
+  certificates: ProFirmMediaItem[];
+  awards: ProFirmMediaItem[];
+  photos: ProFirmMediaItem[];
+  videos: ProFirmMediaItem[];
+}
+
+const defaultContent: ProFirmContent = {
+  headline: "Pro Firm",
+  subtitle: "Credentials, achievements, and proof of performance from the team behind LOGICTRADERSLTD.",
+  certificates: [],
+  awards: [],
+  photos: [],
+  videos: [],
+};
+
+const typeConfig: Record<ProFirmMediaType, { label: string; icon: any }> = {
+  certificates: { label: "Certificates", icon: FileBadge2 },
+  awards: { label: "Awards", icon: Award },
+  photos: { label: "Photos", icon: ImageIcon },
+  videos: { label: "Videos", icon: Video },
+};
+
+const isImageUrl = (value: string) => {
+  if (!value) return false;
+  if (value.startsWith("data:image/")) return true;
+  return /(?:\.(png|jpe?g|gif|webp|avif|svg|bmp|heic|heif|tiff|ico|jfif))(?:\?|$)/i.test(value) || /cloudinary\.com/i.test(value);
+};
+const isVideoUrl = (value: string) => {
+  if (!value) return false;
+  return /(?:\.(mp4|webm|ogg|mov|m4v|avi|m3u8|quicktime))(?:\?|$)/i.test(value)
+    || /youtube\.com|youtu\.be|vimeo\.com|cloudinary\.com.*\.(mp4|webm|mov|m3u8)/i.test(value);
+};
+const isPdfUrl = (value: string) => !value ? false : /(?:\.(pdf))(?:\?|$)/i.test(value) || /application\/pdf/i.test(value);
+const getVideoEmbedUrl = (url: string) => {
+  if (!url) return null;
+  if (/youtube\.com|youtu\.be/i.test(url)) {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtu\.be\/)([^?&/]+)/i);
+    if (match?.[1]) return `https://www.youtube.com/embed/${match[1]}?rel=0`;
+  }
+  if (/vimeo\.com/i.test(url)) {
+    const match = url.match(/vimeo\.com\/(\d+)/i);
+    if (match?.[1]) return `https://player.vimeo.com/video/${match[1]}`;
+  }
+  return url;
+};
 
 export default function PricingPage() {
+  const [content, setContent] = useState<ProFirmContent>(defaultContent);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        setContent({ ...defaultContent, ...JSON.parse(raw) });
+      }
+    } catch (error) {
+      console.error("Failed to load Pro Firm content:", error);
+    }
+  }, []);
+
+  const sections = useMemo(
+    () =>
+      (Object.entries(typeConfig) as [ProFirmMediaType, { label: string; icon: any }][]).map(([key, config]) => ({
+        key,
+        ...config,
+        items: content[key] || [],
+      })),
+    [content]
+  );
+
   return (
-    <main className="min-h-screen bg-dark-950">
+    <main className="min-h-screen bg-dark-950 text-white">
       <Navbar />
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="relative overflow-hidden pt-32 pb-16">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(212,160,23,0.15),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(234,179,8,0.12),transparent_30%)]" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="text-center"
+            className="text-center max-w-4xl mx-auto"
           >
-            <span className="inline-block px-4 py-1 rounded-full bg-gold-500/10 text-gold-400 text-sm font-medium mb-4">
-              Pricing Plans
+            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gold-500/30 bg-gold-500/10 text-gold-300 text-xs font-semibold uppercase tracking-[0.2em] mb-6">
+              <Sparkles className="w-3.5 h-3.5" />
+              Pro Firm
             </span>
-            <h1 className="text-4xl sm:text-5xl font-bold mb-4">
-              Choose Your <span className="gold-gradient-text">Trading Journey</span>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-tight mb-6">
+              <span className="gold-gradient-text">{content.headline || "Pro Firm"}</span>
             </h1>
-            <p className="text-gray-400 max-w-2xl mx-auto">
-              Select the plan that fits your trading goals. Upgrade or downgrade at any time.
+            <p className="text-gray-300 text-lg max-w-3xl mx-auto leading-relaxed">
+              {content.subtitle || "Credentials, achievements, and proof of performance from the team behind LOGICTRADERSLTD."}
             </p>
           </motion.div>
-        </div>
-      </section>
 
-      {/* Pricing Cards */}
-      <section className="pb-20">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-8">
-            {pricingTiers.map((tier, index) => {
-              const Icon = tier.icon;
-              return (
-                <motion.div
-                  key={tier.name}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  className={`dark-card overflow-hidden ${
-                    tier.highlighted ? "border-gold-500/50 scale-105" : ""
-                  }`}
-                >
-                  {tier.highlighted && (
-                    <div className="bg-gold-500 text-dark-950 text-center py-2 text-sm font-bold">
-                      MOST POPULAR
-                    </div>
-                  )}
-                  
-                  <div className="p-8">
-                    {/* Header */}
-                    <div className="flex items-center space-x-3 mb-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        tier.highlighted ? "bg-gold-500/20" : "bg-dark-800"
-                      }`}>
-                        <Icon className={`w-5 h-5 ${
-                          tier.highlighted ? "text-gold-400" : "text-gray-400"
-                        }`} />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold">{tier.name}</h3>
-                        <p className="text-sm text-gray-500">{tier.description}</p>
-                      </div>
-                    </div>
-
-                    {/* Price */}
-                    <div className="mb-6">
-                      <span className="text-4xl font-bold gold-gradient-text">
-                        {tier.price}
-                      </span>
-                      <span className="text-gray-500">{tier.period}</span>
-                    </div>
-
-                    {/* Features */}
-                    <ul className="space-y-3 mb-8">
-                      {tier.features.map((feature, i) => (
-                        <li key={i} className="flex items-center space-x-3">
-                          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                            tier.highlighted ? "bg-gold-500/20" : "bg-green-500/20"
-                          }`}>
-                            <Check className={`w-3 h-3 ${
-                              tier.highlighted ? "text-gold-400" : "text-green-400"
-                            }`} />
-                          </div>
-                          <span className="text-gray-300 text-sm">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {/* CTA */}
-                    <Link
-                      href={tier.href}
-                      className={`w-full flex items-center justify-center space-x-2 py-3 rounded-lg font-medium transition-all ${
-                        tier.highlighted
-                          ? "gold-button"
-                          : "border border-gold-500/50 text-gold-400 hover:bg-gold-500/10"
-                      }`}
-                    >
-                      <span>{tier.cta}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </Link>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-5xl mx-auto">
+            {sections.map(({ key, label, icon: Icon, items }) => (
+              <div key={key} className="rounded-2xl border border-dark-800 bg-dark-900/70 p-4 backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-gold-500/10 text-gold-400 flex items-center justify-center">
+                    <Icon className="w-5 h-5" />
                   </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ Section */}
-      <section className="pb-20">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold text-center mb-8">
-            Frequently Asked Questions
-          </h2>
-          <div className="space-y-4">
-            {[
-              {
-                q: "Can I upgrade or downgrade my plan?",
-                a: "Yes, you can change your plan at any time. Changes will take effect at the start of your next billing cycle.",
-              },
-              {
-                q: "Is there a money-back guarantee?",
-                a: "Yes, we offer a 7-day money-back guarantee for all paid plans. No questions asked.",
-              },
-              {
-                q: "What payment methods do you accept?",
-                a: "We accept credit/debit cards via Stripe and MTN Mobile Money (in selected regions).",
-              },
-              {
-                q: "How do I access my purchased content?",
-                a: "After purchase, you'll have immediate access to all your content through your personal dashboard.",
-              },
-            ].map((faq, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-                className="dark-card p-6"
-              >
-                <h3 className="font-bold mb-2">{faq.q}</h3>
-                <p className="text-gray-400 text-sm">{faq.a}</p>
-              </motion.div>
+                  <span className="text-2xl font-bold text-white">{items.length}</span>
+                </div>
+                <p className="text-sm text-gray-400">{label}</p>
+              </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="pb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+          {sections.map(({ key, label, icon: Icon, items }) => (
+            <motion.div
+              key={key}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="rounded-3xl border border-dark-800 bg-gradient-to-br from-dark-900 via-dark-950 to-dark-900 p-6 sm:p-8 shadow-[0_0_30px_rgba(0,0,0,0.25)]"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gold-500/10 text-gold-400 flex items-center justify-center">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Showcase</p>
+                    <h2 className="text-2xl font-bold text-white">{label}</h2>
+                  </div>
+                </div>
+              </div>
+
+              {items.length === 0 ? (
+                <div className="border border-dashed border-dark-700 rounded-2xl p-10 text-center text-gray-500">
+                  No {label.toLowerCase()} available yet.
+                </div>
+              ) : (
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {items.map((item) => {
+                    const mediaUrl = getVideoEmbedUrl(item.url);
+                    const shouldRenderVideo = key === "videos" || isVideoUrl(item.url);
+                    const shouldRenderImage = key === "photos" || isImageUrl(item.url);
+                    const shouldRenderPdf = isPdfUrl(item.url);
+
+                    return (
+                      <div key={item.id} className="group overflow-hidden rounded-2xl border border-dark-800 bg-dark-950/80 transition-all hover:border-gold-500/30 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(212,160,23,0.08)]">
+                        {shouldRenderVideo ? (
+                          <div className="h-56 overflow-hidden bg-dark-950">
+                            {mediaUrl && /youtube\.com|youtu\.be|vimeo\.com/i.test(item.url) ? (
+                              <iframe
+                                className="h-full w-full"
+                                src={mediaUrl}
+                                title={item.title}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            ) : (
+                              <video className="h-full w-full object-cover" src={item.url} controls preload="metadata" playsInline />
+                            )}
+                          </div>
+                        ) : shouldRenderImage ? (
+                          <img src={item.url} alt={item.title} className="h-56 w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                        ) : shouldRenderPdf ? (
+                          <iframe src={item.url} title={item.title} className="h-56 w-full border-0 bg-white" />
+                        ) : (
+                          <div className="h-56 bg-[radial-gradient(circle_at_center,rgba(212,160,23,0.14),transparent_40%),linear-gradient(135deg,#0f172a,#111827)] flex items-center justify-center text-gold-400">
+                            <Sparkles className="w-12 h-12" />
+                          </div>
+                        )}
+
+                        <div className="p-5 space-y-3">
+                          <h3 className="font-bold text-lg text-white">{item.title}</h3>
+                          {item.description && <p className="text-sm text-gray-400 leading-relaxed">{item.description}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          ))}
         </div>
       </section>
 

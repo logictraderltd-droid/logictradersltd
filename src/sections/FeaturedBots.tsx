@@ -46,13 +46,16 @@ export default function FeaturedBots() {
         const { data, error } = await supabase
           .from("products")
           .select("*")
-          .eq("product_type", "bot")
           .eq("is_active", true)
-          .order("created_at", { ascending: false })
-          .limit(2);
+          .order("created_at", { ascending: false });
 
         if (error) throw error;
-        setBots((data || []).map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "bot" })));
+
+        const botItems = (data || [])
+          .filter((item: any) => (item.product_type ?? item.type ?? "").toString().toLowerCase() === "bot")
+          .slice(0, 2);
+
+        setBots(botItems.map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "bot" })));
       } catch (error) {
         console.error("Unable to load featured bots:", error);
         setBots([]);

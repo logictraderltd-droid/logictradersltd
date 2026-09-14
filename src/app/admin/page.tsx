@@ -16,6 +16,7 @@ import { ProductsTab } from "@/components/admin/ProductsTab";
 import { OrdersTab } from "@/components/admin/OrdersTab";
 import { SignalsTab } from "@/components/admin/SignalsTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
+import { ProFirmTab } from "@/components/admin/ProFirmTab";
 
 interface AdminStats {
   totalUsers: number;
@@ -243,6 +244,10 @@ export default function AdminDashboard() {
                       products={products}
                       onRefresh={() => fetchTabData(true)}
                     />
+                  )}
+
+                  {activeTab === "pro-firm" && (
+                    <ProFirmTab />
                   )}
 
                   {activeTab === "settings" && (

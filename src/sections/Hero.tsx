@@ -71,19 +71,23 @@ export default function Hero() {
       try {
         const { data, error } = await createBrowserClient()
           .from("products")
-          .select("id, name, description, type, thumbnail_url, metadata")
+          .select("*")
           .eq("is_active", true)
-          .in("type", ["course", "signal", "bot"])
           .order("created_at", { ascending: false });
 
         if (error) throw error;
 
+        const allowedTypes = new Set(["course", "signal", "bot"]);
         const videos = (data || [])
+          .filter((product) => {
+            const productType = (product.product_type ?? product.type ?? "").toString().toLowerCase();
+            return allowedTypes.has(productType);
+          })
           .map((product) => ({
             id: product.id,
             name: product.name,
             description: product.description,
-            type: product.type,
+            type: (product.product_type ?? product.type ?? "course").toString(),
             thumbnail_url: product.thumbnail_url,
             video_url: product.metadata?.video_url,
             source: product.metadata?.video_url?.includes("youtube.com") || product.metadata?.video_url?.includes("youtu.be") ? "youtube" : "video",

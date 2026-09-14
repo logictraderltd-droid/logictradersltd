@@ -53,13 +53,17 @@ export default function FeaturedCourses() {
         const { data, error } = await supabase
           .from("products")
           .select("*")
-          .eq("product_type", "course")
           .eq("is_active", true)
-          .order("created_at", { ascending: false })
-          .limit(3);
+          .order("created_at", { ascending: false });
 
         if (error) throw error;
-        setCourses((data || []).map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "course" })));
+
+        const courseItems = (data || []).filter((item: any) => {
+          const productType = (item.product_type ?? item.type ?? "").toString().toLowerCase();
+          return productType === "course";
+        }).slice(0, 3);
+
+        setCourses(courseItems.map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "course" })));
       } catch (error) {
         console.error("Unable to load featured courses:", error);
         setCourses([]);
