@@ -157,14 +157,14 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             // Prepare payload
             const payload: any = {
                 ...formData,
-                product_type: formData.type,
+                type: formData.type,
                 price: priceValue,
                 metadata: {
                     ...(editingProduct?.metadata || {}),
                 }
             };
 
-            delete payload.type;
+            delete payload.product_type;
 
             // Add type-specific fields
             if (formData.type === 'course') {

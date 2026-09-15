@@ -21,7 +21,7 @@ export default function CoursesPage() {
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .eq("product_type", "course")
+        .or("type.eq.course,product_type.eq.course")
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 

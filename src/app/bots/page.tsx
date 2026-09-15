@@ -21,7 +21,7 @@ export default function BotsPage() {
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .eq("product_type", "bot")
+        .or("type.eq.bot,product_type.eq.bot")
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 

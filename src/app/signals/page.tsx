@@ -19,7 +19,7 @@ export default function SignalsPage() {
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .eq("product_type", "signal")
+        .or("type.eq.signal,product_type.eq.signal")
         .eq("is_active", true);
 
       if (error) {

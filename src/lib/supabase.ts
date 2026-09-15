@@ -23,10 +23,12 @@ export function getSupabaseServiceRoleKey() {
   return serviceRoleKey;
 }
 
+export const productTypeFilter = (type: string) => `type.eq.${type},product_type.eq.${type}`;
+
 export const normalizeProductRow = (product: any): Product => ({
   ...product,
-  type: product?.product_type ?? product?.type ?? 'course',
-  product_type: product?.product_type ?? product?.type ?? 'course',
+  type: product?.type ?? product?.product_type ?? 'course',
+  product_type: product?.type ?? product?.product_type ?? 'course',
 });
 
 export const normalizeProductRows = (products: any[] = []): Product[] =>
@@ -123,7 +125,7 @@ export const db = {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('product_type', type)
+        .or(productTypeFilter(type))
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
@@ -142,7 +144,7 @@ export const db = {
           *,
           lessons:course_lessons(*)
         `)
-        .eq('product_type', 'course')
+        .or(productTypeFilter('course'))
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
@@ -159,7 +161,7 @@ export const db = {
           lessons:course_lessons(*)
         `)
         .eq('id', id)
-        .eq('product_type', 'course')
+        .or(productTypeFilter('course'))
         .single();
 
       if (error) throw error;
@@ -186,7 +188,7 @@ export const db = {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('product_type', 'signal')
+        .or(productTypeFilter('signal'))
         .eq('is_active', true);
 
       if (error) throw error;
@@ -225,7 +227,7 @@ export const db = {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('product_type', 'bot')
+        .or(productTypeFilter('bot'))
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
