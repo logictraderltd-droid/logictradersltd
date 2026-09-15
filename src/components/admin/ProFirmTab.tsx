@@ -105,7 +105,45 @@ export function ProFirmTab() {
     setContent(nextContent);
   };
 
-  const addItem = () => {
+  const persistContent = async (nextContent: ProFirmContent) => {
+    const supabase = createBrowserClient();
+    const payload = {
+      key: SUPABASE_KEY,
+      value: nextContent,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      const { data: existingRow, error: selectError } = await supabase
+        .from("site_content")
+        .select("id")
+        .eq("key", SUPABASE_KEY)
+        .maybeSingle();
+
+      if (selectError && selectError.code !== "PGRST116") {
+        throw selectError;
+      }
+
+      const upsertResult = existingRow
+        ? await supabase
+            .from("site_content")
+            .update(payload)
+            .eq("id", existingRow.id)
+            .select()
+        : await supabase
+            .from("site_content")
+            .insert(payload)
+            .select();
+
+      if (upsertResult.error) throw upsertResult.error;
+      return upsertResult.data;
+    } catch (error) {
+      console.error("Pro Firm save failed:", error);
+      throw error;
+    }
+  };
+
+  const addItem = async () => {
     const finalUrl = draft.url.trim();
     if (!draft.title.trim() || !finalUrl) {
       setNotification({ type: "error", message: "Please add a title and a valid URL or upload." });
@@ -129,7 +167,13 @@ export function ProFirmTab() {
 
     saveContent(nextContent);
     setDraft({ title: "", url: "", description: "" });
-    setNotification({ type: "success", message: `${typeConfig[activeType].label} added successfully.` });
+
+    try {
+      await persistContent(nextContent);
+      setNotification({ type: "success", message: `${typeConfig[activeType].label} added successfully and saved.` });
+    } catch {
+      setNotification({ type: "error", message: "The item was not saved. Please retry." });
+    }
   };
 
   const handleUploadSuccess = (result: any) => {
@@ -143,7 +187,7 @@ export function ProFirmTab() {
     setNotification({ type: "success", message: "Upload ready. Click Add item to save it to the gallery." });
   };
 
-  const removeItem = (itemId: string) => {
+  const removeItem = async (itemId: string) => {
     const nextType = typeConfig[activeType].key;
     const currentItems: ProFirmMediaItem[] = Array.isArray(content[nextType]) ? content[nextType] as ProFirmMediaItem[] : [];
     const nextContent = {
@@ -152,7 +196,13 @@ export function ProFirmTab() {
     } as ProFirmContent;
 
     saveContent(nextContent);
-    setNotification({ type: "success", message: "Item removed." });
+
+    try {
+      await persistContent(nextContent);
+      setNotification({ type: "success", message: "Item removed and saved." });
+    } catch {
+      setNotification({ type: "error", message: "Removal did not save. Please retry." });
+    }
   };
 
   const handleSave = async () => {
@@ -306,7 +356,7 @@ export function ProFirmTab() {
 
           <button
             type="button"
-            onClick={addItem}
+            onClick={() => void addItem()}
             className="bg-gold-500 hover:bg-gold-600 text-dark-950 font-bold px-5 py-3 rounded-xl flex items-center gap-2 transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -348,7 +398,7 @@ export function ProFirmTab() {
                         <h4 className="font-semibold text-white">{item.title}</h4>
                         <button
                           type="button"
-                          onClick={() => removeItem(item.id)}
+                          onClick={() => void removeItem(item.id)}
                           className="text-gray-500 hover:text-red-400 transition-colors"
                         >
                           <X className="w-4 h-4" />
