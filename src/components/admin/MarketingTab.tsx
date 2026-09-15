@@ -148,7 +148,7 @@ export function MarketingTab() {
     setSocialLinks(nextLinks);
   };
 
-  const addShort = () => {
+  const addShort = async () => {
     const finalUrl = shortDraft.video_url.trim();
     if (!shortDraft.title.trim() || !finalUrl) {
       setNotification({ type: "error", message: "Please add a title and video URL." });
@@ -169,13 +169,16 @@ export function MarketingTab() {
     const nextLinks = socialLinks;
     saveShorts(nextShorts);
     setShortDraft({ title: "", description: "", video_url: "", source: "youtube", thumbnail_url: "" });
-    setNotification({ type: "success", message: "Market short added." });
-    void persistContent(nextShorts, nextLinks).catch(() => {
-      setNotification({ type: "error", message: "Short saved locally only. Please retry save." });
-    });
+
+    try {
+      await persistContent(nextShorts, nextLinks);
+      setNotification({ type: "success", message: "Market short added and saved." });
+    } catch {
+      setNotification({ type: "error", message: "Short was not saved. Please retry." });
+    }
   };
 
-  const addSocialLink = () => {
+  const addSocialLink = async () => {
     const finalHref = socialDraft.href.trim();
     const finalLabel = socialDraft.label.trim();
 
@@ -195,28 +198,37 @@ export function MarketingTab() {
     const nextShorts = shorts;
     saveSocialLinks(nextLinks);
     setSocialDraft({ label: "", href: "", platform: "custom" });
-    setNotification({ type: "success", message: "Social link added." });
-    void persistContent(nextShorts, nextLinks).catch(() => {
-      setNotification({ type: "error", message: "Social link saved locally only. Please retry save." });
-    });
+
+    try {
+      await persistContent(nextShorts, nextLinks);
+      setNotification({ type: "success", message: "Social link added and saved." });
+    } catch {
+      setNotification({ type: "error", message: "Social link was not saved. Please retry." });
+    }
   };
 
-  const removeShort = (id: string) => {
+  const removeShort = async (id: string) => {
     const nextShorts = shorts.filter((item) => item.id !== id);
     saveShorts(nextShorts);
-    setNotification({ type: "success", message: "Market short removed." });
-    void persistContent(nextShorts, socialLinks).catch(() => {
-      setNotification({ type: "error", message: "Removal update failed. Please retry save." });
-    });
+
+    try {
+      await persistContent(nextShorts, socialLinks);
+      setNotification({ type: "success", message: "Market short removed and saved." });
+    } catch {
+      setNotification({ type: "error", message: "Removal update failed. Please retry." });
+    }
   };
 
-  const removeSocialLink = (id: string) => {
+  const removeSocialLink = async (id: string) => {
     const nextLinks = socialLinks.filter((item) => item.id !== id);
     saveSocialLinks(nextLinks);
-    setNotification({ type: "success", message: "Social link removed." });
-    void persistContent(shorts, nextLinks).catch(() => {
-      setNotification({ type: "error", message: "Removal update failed. Please retry save." });
-    });
+
+    try {
+      await persistContent(shorts, nextLinks);
+      setNotification({ type: "success", message: "Social link removed and saved." });
+    } catch {
+      setNotification({ type: "error", message: "Removal update failed. Please retry." });
+    }
   };
 
   const handleUploadSuccess = (result: any) => {
@@ -360,7 +372,7 @@ export function MarketingTab() {
 
             <button
               type="button"
-              onClick={addShort}
+              onClick={() => void addShort()}
               className="bg-gold-500 hover:bg-gold-600 text-dark-950 font-bold px-5 py-3 rounded-xl flex items-center gap-2 transition-all"
             >
               <Plus className="w-4 h-4" />
@@ -433,7 +445,7 @@ export function MarketingTab() {
 
             <button
               type="button"
-              onClick={addSocialLink}
+              onClick={() => void addSocialLink()}
               className="bg-gold-500 hover:bg-gold-600 text-dark-950 font-bold px-5 py-3 rounded-xl flex items-center gap-2 transition-all"
             >
               <Plus className="w-4 h-4" />
