@@ -28,8 +28,10 @@ export interface Product {
   name: string;
   description: string;
   type: ProductType;
+  product_type?: ProductType;
   price: number;
-  currency: string;
+  price_cents?: number;
+  currency?: string;
   thumbnail_url?: string;
   is_active: boolean;
   metadata?: Record<string, any>;

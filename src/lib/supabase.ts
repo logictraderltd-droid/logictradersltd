@@ -25,11 +25,19 @@ export function getSupabaseServiceRoleKey() {
 
 export const productTypeFilter = (type: string) => `type.eq.${type},product_type.eq.${type}`;
 
-export const normalizeProductRow = (product: any): Product => ({
-  ...product,
-  type: product?.type ?? product?.product_type ?? 'course',
-  product_type: product?.type ?? product?.product_type ?? 'course',
-});
+export const normalizeProductRow = (product: any): Product => {
+  const productType = product?.product_type ?? product?.type ?? 'course';
+  const priceValue = Number(product?.price ?? (typeof product?.price_cents === 'number' ? product.price_cents / 100 : 0));
+
+  return {
+    ...product,
+    type: productType,
+    product_type: productType,
+    price: Number.isFinite(priceValue) ? priceValue : 0,
+    price_cents: typeof product?.price_cents === 'number' ? product.price_cents : Math.round(priceValue * 100),
+    currency: product?.currency ?? 'USD',
+  };
+};
 
 export const normalizeProductRows = (products: any[] = []): Product[] =>
   products.map(normalizeProductRow);

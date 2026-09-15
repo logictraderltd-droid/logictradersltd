@@ -18,6 +18,9 @@ const formatProductPrice = (price: number, currency?: string) => {
     }).format(price);
 };
 
+const getProductType = (product: Product | Partial<Product> | null | undefined) =>
+    (product?.product_type ?? product?.type ?? 'course') as Product['type'];
+
 interface ProductsTabProps {
     products: Product[];
     onRefresh: () => void;
@@ -42,8 +45,8 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
         name: "",
         description: "",
         type: "course",
+        product_type: "course",
         price: 0,
-        currency: "USD",
         is_active: true,
         thumbnail_url: "",
     });
@@ -84,12 +87,13 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
         setNotification(null);
         if (product) {
             setEditingProduct(product);
+            const productType = getProductType(product);
             setFormData({
                 name: product.name,
                 description: product.description,
-                type: product.type,
-                price: product.price,
-                currency: product.currency,
+                type: productType,
+                product_type: productType,
+                price: product.price ?? Number((product.price_cents ?? 0) / 100),
                 is_active: product.is_active,
                 thumbnail_url: product.thumbnail_url || "",
             });
@@ -113,8 +117,8 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 name: "",
                 description: "",
                 type: "course",
+                product_type: "course",
                 price: 0,
-                currency: "USD",
                 is_active: true,
                 thumbnail_url: "",
             });
@@ -154,17 +158,24 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 throw new Error("Thumbnail cannot be a pasted image (Base64). Please use the 'Upload' button or a direct https:// link.");
             }
 
-            // Prepare payload
+            const productType = getProductType(formData);
+
+            // Prepare payload using the live Supabase schema.
             const payload: any = {
-                ...formData,
-                type: formData.type,
-                price: priceValue,
+                name: formData.name,
+                description: formData.description,
+                product_type: productType,
+                price_cents: Math.round(priceValue * 100),
+                is_active: formData.is_active,
+                thumbnail_url: formData.thumbnail_url || null,
                 metadata: {
                     ...(editingProduct?.metadata || {}),
                 }
             };
 
-            delete payload.product_type;
+            delete payload.type;
+            delete payload.price;
+            delete payload.currency;
 
             // Add type-specific fields
             if (formData.type === 'course') {
@@ -953,34 +964,20 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                 <div className="space-y-4">
                                     <h4 className="text-sm uppercase tracking-wider text-gray-500 font-semibold border-b border-dark-800 pb-2">Pricing & Visibility</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium text-gray-400">{formData.type === 'course' ? 'Price per video course' : 'Price'} <span className="text-red-500">*</span></label>
-                                                <div className="relative">
-                                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        required
-                                                        min="0"
-                                                        value={formData.price}
-                                                        onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-                                                        className="w-full bg-dark-950 border border-dark-800 rounded-xl pl-8 pr-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors font-mono"
-                                                        placeholder="0.00"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium text-gray-400">Currency</label>
-                                                <select
-                                                    value={formData.currency}
-                                                    onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                                                    className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors"
-                                                >
-                                                    <option value="USD">USD</option>
-                                                    <option value="EUR">EUR</option>
-                                                    <option value="GBP">GBP</option>
-                                                </select>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-400">{formData.type === 'course' ? 'Price per video course' : 'Price'} <span className="text-red-500">*</span></label>
+                                            <div className="relative">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    required
+                                                    min="0"
+                                                    value={formData.price}
+                                                    onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                                                    className="w-full bg-dark-950 border border-dark-800 rounded-xl pl-8 pr-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors font-mono"
+                                                    placeholder="0.00"
+                                                />
                                             </div>
                                         </div>
 
