@@ -319,14 +319,16 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
         e.preventDefault();
         if (!activeCourseForLessons) return;
         setIsLoading(true);
-
-        const supabase = createBrowserClient();
+        // Build payload from form. Normalize numeric values.
         const payload = {
             ...lessonForm,
+            order_index: Number.isFinite(Number(lessonForm.order_index)) ? Number(lessonForm.order_index) : 0,
             course_id: activeCourseForLessons.id
         };
 
         try {
+            const supabase = createBrowserClient();
+
             if (editingLesson) {
                 const { error } = await supabase
                     .from('course_lessons')
@@ -348,7 +350,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             await fetchLessons(activeCourseForLessons.id);
         } catch (error: any) {
             console.error("Error saving lesson:", error);
-            setNotification({ type: 'error', message: error.message || 'Failed to save lesson. Check RLS policies.' });
+            setNotification({ type: 'error', message: error?.message || String(error) || 'Failed to save lesson. Check RLS policies.' });
         } finally {
             setIsLoading(false);
         }

@@ -22,6 +22,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<{ error: string | null }>;
+  socialLogin: (provider: 'google' | 'github') => Promise<{ error: string | null }>;
   register: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -70,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Try to fetch profile but don't block if it fails
       try {
+        // Fetch profile from user_profiles only
         const { data: profileData, error: profileError } = await supabase
           .from("user_profiles")
           .select("*")
@@ -193,6 +195,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const socialLogin = async (provider: 'google' | 'github') : Promise<{ error: string | null }> => {
+    try {
+      console.log('🔐 Starting social login for:', provider);
+      setIsLoading(true);
+      // Supabase will redirect the browser to the provider
+      const { data, error } = await supabase.auth.signInWithOAuth({ provider });
+
+      if (error) {
+        console.error('❌ Social login error:', error.message || error);
+        setIsLoading(false);
+        return { error: error.message || 'Social login failed' };
+      }
+
+      // If redirecting, the session will be handled in the auth state change listener
+      return { error: null };
+    } catch (err: any) {
+      console.error('❌ Unexpected social login error:', err);
+      setIsLoading(false);
+      return { error: err.message || 'Social login failed' };
+    }
+  };
+
   const register = async (
     email: string,
     password: string,
@@ -223,8 +247,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.user) {
         console.log('✅ Registration successful');
-        // Wait a bit for trigger to create records
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Call server-side register endpoint to create records in public.users and profile table
+        try {
+          await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: data.user.id, email, firstName, lastName })
+          });
+        } catch (err) {
+          console.error('Error calling server register API:', err);
+        }
+
+        // Wait a bit then refresh user data
+        await new Promise(resolve => setTimeout(resolve, 800));
         await fetchUserData(data.user.id);
       }
 
@@ -265,6 +300,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: !!user,
     isAdmin: user?.role === "admin",
     login,
+    socialLogin,
     register,
     logout,
     refreshUser,

@@ -16,7 +16,7 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
-  const { login, isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
+  const { login, socialLogin, isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
 
   const [formData, setFormData] = useState({
     email: "",
@@ -233,6 +233,7 @@ function LoginContent() {
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button
               type="button"
+              onClick={() => socialLogin('google')}
               className="flex items-center justify-center px-4 py-2 border border-dark-700 rounded-lg text-sm font-medium text-gray-300 hover:bg-dark-800 transition-colors"
             >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
@@ -257,6 +258,7 @@ function LoginContent() {
             </button>
             <button
               type="button"
+              onClick={() => socialLogin('github')}
               className="flex items-center justify-center px-4 py-2 border border-dark-700 rounded-lg text-sm font-medium text-gray-300 hover:bg-dark-800 transition-colors"
             >
               <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">

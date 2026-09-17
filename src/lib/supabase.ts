@@ -77,28 +77,52 @@ export const db = {
       return data;
     },
 
+    // Profile fields are stored on the users table; return a synthesized UserProfile
     async getProfile(userId: string): Promise<UserProfile | null> {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('user_id', userId)
+        .from('users')
+        .select('id, first_name, last_name, created_at, updated_at')
+        .eq('id', userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
-      return data;
+      if (error) throw error;
+
+      if (!data) return null;
+
+      return {
+        id: data.id,
+        user_id: data.id,
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      } as UserProfile;
     },
 
     async updateProfile(userId: string, profile: Partial<UserProfile>): Promise<UserProfile> {
       const supabase = createBrowserClient();
+      const updatePayload: any = { updated_at: new Date().toISOString() };
+      if (profile.first_name !== undefined) updatePayload.first_name = profile.first_name;
+      if (profile.last_name !== undefined) updatePayload.last_name = profile.last_name;
+
       const { data, error } = await supabase
-        .from('user_profiles')
-        .upsert({ user_id: userId, ...profile, updated_at: new Date().toISOString() })
-        .select()
+        .from('users')
+        .update(updatePayload)
+        .eq('id', userId)
+        .select('id, first_name, last_name, created_at, updated_at')
         .single();
 
       if (error) throw error;
-      return data;
+
+      return {
+        id: data.id,
+        user_id: data.id,
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      } as UserProfile;
     },
   },
 

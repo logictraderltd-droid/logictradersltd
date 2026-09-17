@@ -15,35 +15,37 @@ export async function POST(request: Request) {
 
     const supabase = createAdminClient();
 
-    // Create user record in users table
+    // Upsert user record in users table (avoid duplicate errors)
     const { error: userError } = await supabase
       .from('users')
-      .insert({
+      .upsert({
         id: userId,
         email: email,
         role: 'customer',
-      });
+      }, { onConflict: 'id' });
 
     if (userError) {
-      console.error('Error creating user record:', userError);
+      console.error('Error upserting user record:', userError);
       return NextResponse.json(
-        { error: 'Failed to create user record' },
+        { error: 'Failed to create or update user record' },
         { status: 500 }
       );
     }
 
-    // Create user profile
-    const { error: profileError } = await supabase
-      .from('user_profiles')
-      .insert({
-        user_id: userId,
-        first_name: firstName || '',
-        last_name: lastName || '',
-      });
+    // Save profile fields on the users table
+    try {
+      const { data: updatedUser, error: updateErr } = await supabase
+        .from('users')
+        .update({ first_name: firstName || '', last_name: lastName || '' })
+        .eq('id', userId)
+        .select('id')
+        .single();
 
-    if (profileError) {
-      console.error('Error creating profile:', profileError);
-      // Don't fail if profile creation fails, user record is already created
+      if (updateErr) {
+        console.error('Error updating users table with profile fields:', updateErr);
+      }
+    } catch (err: any) {
+      console.error('Unexpected error updating users with profile fields:', err);
     }
 
     return NextResponse.json({ success: true });
