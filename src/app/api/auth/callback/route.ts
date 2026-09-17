@@ -30,6 +30,24 @@ export async function GET(request: Request) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // After exchanging code, check if user has names in public.users; if not, redirect to complete-profile
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+      if (session && session.user) {
+        try {
+          const { data: userRow, error: userErr } = await supabase
+            .from('users')
+            .select('first_name, last_name')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (!userErr && userRow && (!userRow.first_name || !userRow.last_name)) {
+            return NextResponse.redirect(`${appUrl}/complete-profile`);
+          }
+        } catch (e) {
+          // ignore and continue redirect
+        }
+      }
+
       return NextResponse.redirect(`${appUrl}${next.startsWith('/') ? next : `/${next}`}`);
     }
   }
