@@ -247,20 +247,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.user) {
         console.log('✅ Registration successful');
-        // Call server-side register endpoint to create records in public.users and profile table
-        try {
-          await fetch('/api/auth/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: data.user.id, email, firstName, lastName })
-          });
-        } catch (err) {
-          console.error('Error calling server register API:', err);
+        // If session exists (immediate confirm), refresh data; otherwise
+        // the user must confirm their email and the auth callback will handle creating users.
+        if (data.session) {
+          // session exists (email confirmed or provider sign-up)
+          await new Promise(resolve => setTimeout(resolve, 800));
+          await fetchUserData(data.user.id);
         }
-
-        // Wait a bit then refresh user data
-        await new Promise(resolve => setTimeout(resolve, 800));
-        await fetchUserData(data.user.id);
+        // If no session, user must confirm via email. UI will guide them.
       }
 
       return { error: null };

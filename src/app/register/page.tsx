@@ -69,9 +69,9 @@ function RegisterContent() {
       return;
     }
 
-    // Successful registration
+    // Successful registration: prompt user to check email for confirmation
     setIsLoading(false);
-    router.push("/dashboard");
+    router.push('/register/confirm');
   };
 
   const passwordStrength = () => {
