@@ -149,7 +149,7 @@ function RegisterContent() {
                   autoComplete="name"
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  className="dark-input w-full pl-10"
+                  className="dark-input has-leading-icon w-full"
                   placeholder="Your full name"
                 />
               </div>
@@ -168,7 +168,7 @@ function RegisterContent() {
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="dark-input w-full pl-10"
+                  className="dark-input has-leading-icon w-full"
                   placeholder="john@example.com"
                 />
               </div>
@@ -187,7 +187,7 @@ function RegisterContent() {
                   required
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="dark-input w-full pl-10 pr-10"
+                  className="dark-input has-leading-icon has-trailing-control w-full"
                   placeholder="Create a password"
                 />
                 <button
@@ -233,7 +233,7 @@ function RegisterContent() {
                   required
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className="dark-input w-full pl-10"
+                  className="dark-input has-leading-icon w-full"
                   placeholder="Confirm your password"
                 />
               </div>

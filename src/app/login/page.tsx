@@ -146,7 +146,7 @@ function LoginContent() {
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="dark-input w-full pl-10"
+                  className="dark-input has-leading-icon w-full"
                   placeholder="Enter your email"
                 />
               </div>
@@ -165,7 +165,7 @@ function LoginContent() {
                   required
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="dark-input w-full pl-10 pr-10"
+                  className="dark-input has-leading-icon has-trailing-control w-full"
                   placeholder="Enter your password"
                 />
                 <button

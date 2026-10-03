@@ -41,7 +41,7 @@ export default function CompleteProfilePage() {
             <label htmlFor="full-name" className="block text-sm text-gray-300 mb-2">Full name</label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-              <input id="full-name" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="dark-input w-full pl-10" autoComplete="name" />
+              <input id="full-name" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="dark-input has-leading-icon w-full" autoComplete="name" />
             </div>
           </div>
           <button className="gold-button w-full" disabled={isLoading}>{isLoading ? 'Saving...' : 'Save and continue'}</button>
