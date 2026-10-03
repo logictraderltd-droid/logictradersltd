@@ -200,7 +200,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🔐 Starting social login for:', provider);
       setIsLoading(true);
       // Supabase will redirect the browser to the provider
-      const { data, error } = await supabase.auth.signInWithOAuth({ provider });
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/api/auth/callback?next=%2Fdashboard`,
+        },
+      });
 
       if (error) {
         console.error('❌ Social login error:', error.message || error);
@@ -235,7 +240,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           data: {
             first_name: firstName,
             last_name: lastName,
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/api/auth/callback?next=%2Fdashboard&flow=email_signup`,
         }
       });
 

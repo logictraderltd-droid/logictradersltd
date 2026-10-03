@@ -5,7 +5,8 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/';
+  const next = searchParams.get('next') ?? '/dashboard';
+  const isEmailSignup = searchParams.get('flow') === 'email_signup';
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || origin;
 
   if (code) {
@@ -34,21 +35,38 @@ export async function GET(request: Request) {
       const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
       if (session && session.user) {
         try {
-          const { data: userRow, error: userErr } = await supabase
-            .from('users')
-            .select('first_name, last_name')
-            .eq('id', session.user.id)
-            .maybeSingle();
+          let userRole: string | null = null;
 
-          if (!userErr && userRow && (!userRow.first_name || !userRow.last_name)) {
-            return NextResponse.redirect(`${appUrl}/complete-profile`);
+          if (isEmailSignup) {
+            const { data: userRow, error: userErr } = await supabase
+              .from('users')
+              .select('role')
+              .eq('id', session.user.id)
+              .maybeSingle();
+            if (!userErr) userRole = userRow?.role ?? null;
+          } else {
+            const { data: userRow, error: userErr } = await supabase
+              .from('users')
+              .select('first_name, last_name, role')
+              .eq('id', session.user.id)
+              .maybeSingle();
+
+            if (!userErr && userRow && (!userRow.first_name || !userRow.last_name)) {
+              return NextResponse.redirect(`${appUrl}/complete-profile`);
+            }
+            if (!userErr) userRole = userRow?.role ?? null;
+          }
+
+          if (userRole === 'admin') {
+            return NextResponse.redirect(`${appUrl}/admin`);
           }
         } catch (e) {
           // ignore and continue redirect
         }
       }
 
-      return NextResponse.redirect(`${appUrl}${next.startsWith('/') ? next : `/${next}`}`);
+      const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+      return NextResponse.redirect(new URL(safeNext, appUrl));
     }
   }
 
