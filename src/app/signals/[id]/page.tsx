@@ -70,7 +70,6 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
         .from("products")
         .select("*")
         .eq("id", params.id)
-        .eq("product_type", "signal")
         .single();
 
       if (productError) throw productError;

@@ -65,7 +65,6 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         .from("products")
         .select("*")
         .eq("id", params.id)
-        .eq("product_type", "course")
         .single();
 
       if (courseError) throw courseError;

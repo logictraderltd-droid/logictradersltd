@@ -21,14 +21,15 @@ export default function BotsPage() {
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .or("type.eq.bot,product_type.eq.bot")
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error fetching bots:", error);
       } else {
-        setBots((data || []).map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "bot" })));
+        setBots((data || [])
+          .filter((item: any) => (item.product_type ?? item.type ?? "").toString().toLowerCase() === "bot")
+          .map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "bot" })));
       }
       setIsLoading(false);
     };

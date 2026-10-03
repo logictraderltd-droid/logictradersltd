@@ -19,13 +19,13 @@ export default function SignalsPage() {
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .or("type.eq.signal,product_type.eq.signal")
         .eq("is_active", true);
 
       if (error) {
         console.error("Error fetching signal plans:", error);
       } else {
         setPlans((data || [])
+          .filter((item: any) => (item.product_type ?? item.type ?? "").toString().toLowerCase() === "signal")
           .map((item: any) => ({
             ...item,
             price: Number(item.price ?? 0),

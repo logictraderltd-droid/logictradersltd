@@ -63,7 +63,6 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
         .from("products")
         .select("*")
         .eq("id", params.id)
-        .eq("product_type", "bot")
         .single();
 
       if (productError) throw productError;
