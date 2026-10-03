@@ -6,10 +6,12 @@ import { createAdminClient } from '@/lib/supabase';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { firstName, lastName } = body;
+    const fullName = typeof body.fullName === 'string'
+      ? body.fullName.trim()
+      : [body.firstName, body.lastName].filter((name) => typeof name === 'string').join(' ').trim();
 
-    if (!firstName || !lastName) {
-      return NextResponse.json({ error: 'Missing name fields' }, { status: 400 });
+    if (!fullName) {
+      return NextResponse.json({ error: 'Full name is required' }, { status: 400 });
     }
 
     // Get server session to identify the current user
@@ -41,13 +43,18 @@ export async function POST(request: Request) {
 
     // Use admin client to update users table
     const admin = createAdminClient();
+    const profileUpdate = {
+      full_name: fullName,
+      updated_at: new Date().toISOString(),
+    };
+
     const { error } = await admin
       .from('users')
-      .update({ first_name: firstName, last_name: lastName, updated_at: new Date().toISOString() })
+      .update(profileUpdate)
       .eq('id', userId);
 
     if (error) {
-      console.error('Error updating users with names:', error);
+      console.error('Error updating users profile:', error);
       return NextResponse.json({ error: 'Failed to save profile' }, { status: 500 });
     }
 

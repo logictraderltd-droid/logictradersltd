@@ -23,7 +23,7 @@ interface AuthContextType {
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<{ error: string | null }>;
   socialLogin: (provider: 'google' | 'github') => Promise<{ error: string | null }>;
-  register: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: string | null }>;
+  register: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -61,33 +61,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("❌ Error fetching user:", userError);
         console.error("This is likely due to an RLS policy blocking access to the 'public.users' table.");
         setUser(null);
+        setProfile(null);
       } else if (userData) {
         console.log('✅ User data found in public.users:', userData);
         setUser(userData);
+        const nameParts = (userData.full_name || "").trim().split(/\s+/);
+        setProfile({
+          id: userData.id,
+          user_id: userData.id,
+          full_name: userData.full_name || "",
+          first_name: nameParts[0] || "",
+          last_name: nameParts.slice(1).join(" "),
+          created_at: userData.created_at,
+          updated_at: userData.updated_at,
+        });
       } else {
         console.error("❌ Authenticated user has no record in public.users");
         setUser(null);
-      }
-
-      // Try to fetch profile but don't block if it fails
-      try {
-        // Fetch profile from user_profiles only
-        const { data: profileData, error: profileError } = await supabase
-          .from("user_profiles")
-          .select("*")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (profileError) {
-          console.error("❌ Error fetching profile:", profileError);
-        } else if (profileData) {
-          console.log('✅ Profile data found:', profileData);
-          setProfile(profileData);
-        } else {
-          console.warn("⚠️ User profile not found");
-        }
-      } catch (profileErr) {
-        console.error("❌ Profile fetch error:", profileErr);
+        setProfile(null);
       }
 
     } catch (error) {
@@ -225,8 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (
     email: string,
     password: string,
-    firstName: string,
-    lastName: string
+    fullName: string
   ): Promise<{ error: string | null }> => {
     try {
       console.log('📝 Attempting registration for:', email);
@@ -238,8 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: {
           data: {
-            first_name: firstName,
-            last_name: lastName,
+            full_name: fullName.trim(),
           },
           emailRedirectTo: `${window.location.origin}/api/auth/callback?next=%2Fdashboard&flow=email_signup`,
         }

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   role TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('admin', 'customer')),
   is_active BOOLEAN DEFAULT true,
+  full_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

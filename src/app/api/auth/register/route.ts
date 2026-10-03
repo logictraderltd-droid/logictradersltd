@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { userId, email, firstName, lastName } = body;
+    const { userId, email } = body;
+    const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : '';
 
     if (!userId || !email) {
       return NextResponse.json(
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
       .upsert({
         id: userId,
         email: email,
-        role: 'customer',
+        full_name: fullName,
       }, { onConflict: 'id' });
 
     if (userError) {
@@ -30,22 +31,6 @@ export async function POST(request: Request) {
         { error: 'Failed to create or update user record' },
         { status: 500 }
       );
-    }
-
-    // Save profile fields on the users table
-    try {
-      const { data: updatedUser, error: updateErr } = await supabase
-        .from('users')
-        .update({ first_name: firstName || '', last_name: lastName || '' })
-        .eq('id', userId)
-        .select('id')
-        .single();
-
-      if (updateErr) {
-        console.error('Error updating users table with profile fields:', updateErr);
-      }
-    } catch (err: any) {
-      console.error('Unexpected error updating users with profile fields:', err);
     }
 
     return NextResponse.json({ success: true });

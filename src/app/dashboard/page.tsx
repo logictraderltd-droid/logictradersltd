@@ -23,6 +23,8 @@ import {
   AlertTriangle,
   Check,
   XCircle,
+  Save,
+  KeyRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,7 +32,6 @@ import { createBrowserClient } from "@/lib/supabase"; // Updated import
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import {
   User as SupabaseUser,
-  UserProfile,
   Course,
   Subscription,
   TradingBot,
@@ -48,7 +49,7 @@ interface DashboardData {
 
 function DashboardContent() {
   const router = useRouter();
-  const { user, profile, isAuthenticated, isLoading: authLoading, logout } = useAuth();
+  const { user, profile, isAuthenticated, isLoading: authLoading, logout, refreshUser } = useAuth();
   const searchParams = useSearchParams();
   const [data, setData] = useState<DashboardData>({
     courses: [],
@@ -60,6 +61,18 @@ function DashboardContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ fullName: "" });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [passwordForm, setPasswordForm] = useState({ password: "", confirmPassword: "" });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    setProfileForm({
+      fullName: user?.full_name ?? profile?.full_name ?? [profile?.first_name, profile?.last_name].filter(Boolean).join(" "),
+    });
+  }, [profile, user?.full_name]);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -183,6 +196,63 @@ function DashboardContent() {
 
     fetchData();
   }, [user?.id]);
+
+  const handleProfileSave = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) return;
+    if (!profileForm.fullName.trim()) {
+      setProfileMessage({ type: "error", text: "Full name is required." });
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileMessage(null);
+
+    try {
+      const response = await fetch("/api/auth/complete-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: profileForm.fullName.trim(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to save profile.");
+      await refreshUser();
+      setProfileMessage({ type: "success", text: "Profile saved." });
+    } catch (error: any) {
+      setProfileMessage({ type: "error", text: error.message || "Unable to save profile." });
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handlePasswordSave = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordMessage(null);
+
+    if (passwordForm.password.length < 8) {
+      setPasswordMessage({ type: "error", text: "Password must be at least 8 characters." });
+      return;
+    }
+    if (passwordForm.password !== passwordForm.confirmPassword) {
+      setPasswordMessage({ type: "error", text: "Passwords do not match." });
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const supabase = createBrowserClient();
+      const { error } = await supabase.auth.updateUser({ password: passwordForm.password });
+      if (error) throw error;
+      setPasswordForm({ password: "", confirmPassword: "" });
+      setPasswordMessage({ type: "success", text: "Password updated." });
+    } catch (error: any) {
+      setPasswordMessage({ type: "error", text: error.message || "Unable to update password." });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
 
   // Loading spinner for initial auth check only
   if (authLoading) {
@@ -647,47 +717,76 @@ function DashboardContent() {
 
                 {/* Profile Tab */}
                 {activeTab === "profile" && (
-                  <Card className="max-w-2xl mx-auto">
-                    <div className="flex items-center gap-4 mb-8">
-                      <div className="w-20 h-20 rounded-full bg-gold-500 flex items-center justify-center text-dark-950 font-bold text-2xl">
-                        {profile?.first_name?.[0]}{profile?.last_name?.[0]}
+                  <div className="max-w-2xl mx-auto space-y-6">
+                    <Card>
+                      <div className="flex items-center gap-4 mb-8">
+                        <div className="w-16 h-16 rounded-full bg-gold-500 flex items-center justify-center text-dark-950 font-bold text-xl">
+                          {profileForm.fullName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("") || "T"}
+                        </div>
+                        <div>
+                          <h2 className="text-2xl font-bold text-white">Profile</h2>
+                          <p className="text-gray-400">Update your personal information</p>
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="text-2xl font-bold text-white">{profile?.first_name} {profile?.last_name}</h2>
-                        <p className="text-gray-400">Manage your personal information</p>
-                      </div>
-                    </div>
 
-                    <div className="space-y-6">
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-400">First Name</label>
-                          <div className="p-4 bg-dark-900 border border-dark-800 rounded-xl text-white">
-                            {profile?.first_name}
-                          </div>
+                      <form onSubmit={handleProfileSave} className="space-y-5">
+                        <div>
+                          <label className="block space-y-2 text-sm font-medium text-gray-400">
+                            Full name
+                            <input required value={profileForm.fullName} onChange={(event) => setProfileForm({ ...profileForm, fullName: event.target.value })} className="dark-input w-full" autoComplete="name" />
+                          </label>
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-400">Last Name</label>
-                          <div className="p-4 bg-dark-900 border border-dark-800 rounded-xl text-white">
-                            {profile?.last_name}
-                          </div>
+                        <div className="space-y-2 text-sm font-medium text-gray-400">
+                          <label htmlFor="profile-email">Email address</label>
+                          <input id="profile-email" value={user.email} readOnly className="dark-input w-full opacity-70" />
+                          <p className="text-xs text-gray-500">Email changes require a separate verification step.</p>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-400">Email Address</label>
-                        <div className="p-4 bg-dark-900 border border-dark-800 rounded-xl text-white flex items-center justify-between">
-                          {user.email}
-                          <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded border border-green-500/20">Verified</span>
-                        </div>
-                      </div>
-                      <div className="pt-6 border-t border-dark-800">
-                        <button onClick={logout} className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-400 font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
-                          <LogOut className="w-5 h-5" />
-                          Sign Out
+                        {profileMessage && (
+                          <p role="status" className={profileMessage.type === "success" ? "text-sm text-green-400" : "text-sm text-red-400"}>
+                            {profileMessage.text}
+                          </p>
+                        )}
+                        <button type="submit" disabled={profileSaving} className="gold-button flex items-center justify-center gap-2 disabled:opacity-50">
+                          <Save className="w-4 h-4" />
+                          {profileSaving ? "Saving..." : "Save profile"}
                         </button>
+                      </form>
+                    </Card>
+
+                    <Card>
+                      <div className="flex items-center gap-3 mb-6">
+                        <KeyRound className="w-5 h-5 text-gold-400" />
+                        <div>
+                          <h2 className="text-xl font-bold text-white">Change password</h2>
+                          <p className="text-sm text-gray-400">Use at least 8 characters.</p>
+                        </div>
                       </div>
-                    </div>
-                  </Card>
+                      <form onSubmit={handlePasswordSave} className="space-y-5">
+                        <label className="block space-y-2 text-sm font-medium text-gray-400">
+                          New password
+                          <input type="password" required minLength={8} autoComplete="new-password" value={passwordForm.password} onChange={(event) => setPasswordForm({ ...passwordForm, password: event.target.value })} className="dark-input w-full" />
+                        </label>
+                        <label className="block space-y-2 text-sm font-medium text-gray-400">
+                          Confirm new password
+                          <input type="password" required minLength={8} autoComplete="new-password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} className="dark-input w-full" />
+                        </label>
+                        {passwordMessage && (
+                          <p role="status" className={passwordMessage.type === "success" ? "text-sm text-green-400" : "text-sm text-red-400"}>
+                            {passwordMessage.text}
+                          </p>
+                        )}
+                        <button type="submit" disabled={passwordSaving} className="gold-button flex items-center justify-center gap-2 disabled:opacity-50">
+                          <KeyRound className="w-4 h-4" />
+                          {passwordSaving ? "Updating..." : "Update password"}
+                        </button>
+                      </form>
+                    </Card>
+
+                    <button onClick={logout} className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-400 font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                      <LogOut className="w-5 h-5" />
+                      Sign Out
+                    </button>
+                  </div>
                 )}
               </>
             )}

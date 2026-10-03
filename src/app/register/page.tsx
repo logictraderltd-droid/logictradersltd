@@ -12,8 +12,7 @@ function RegisterContent() {
   const { register, socialLogin, isAuthenticated } = useAuth();
 
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
+    fullName: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -31,6 +30,10 @@ function RegisterContent() {
   }, [isAuthenticated, router]);
 
   const validateForm = () => {
+    if (!formData.fullName.trim()) {
+      setError("Please enter your full name");
+      return false;
+    }
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
       return false;
@@ -59,8 +62,7 @@ function RegisterContent() {
     const { error: registerError } = await register(
       formData.email,
       formData.password,
-      formData.firstName,
-      formData.lastName
+      formData.fullName
     );
 
     if (registerError) {
@@ -133,41 +135,23 @@ function RegisterContent() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Name Fields */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-300 mb-2">
-                  First Name
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                  <input
-                    id="firstName"
-                    type="text"
-                    required
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    className="dark-input w-full pl-10"
-                    placeholder="John"
-                  />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-300 mb-2">
-                  Last Name
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                  <input
-                    id="lastName"
-                    type="text"
-                    required
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    className="dark-input w-full pl-10"
-                    placeholder="Doe"
-                  />
-                </div>
+            {/* Full Name Field */}
+            <div>
+              <label htmlFor="fullName" className="block text-sm font-medium text-gray-300 mb-2">
+                Full Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  id="fullName"
+                  type="text"
+                  required
+                  autoComplete="name"
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  className="dark-input w-full pl-10"
+                  placeholder="Your full name"
+                />
               </div>
             </div>
 

@@ -42,6 +42,21 @@ export const normalizeProductRow = (product: any): Product => {
 export const normalizeProductRows = (products: any[] = []): Product[] =>
   products.map(normalizeProductRow);
 
+const mapUserProfile = (data: any): UserProfile => {
+  const fullName = (data.full_name || '').trim();
+  const nameParts = fullName.split(/\s+/);
+
+  return {
+    id: data.id,
+    user_id: data.id,
+    full_name: fullName,
+    first_name: nameParts[0] || '',
+    last_name: nameParts.slice(1).join(' '),
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  };
+};
+
 // Client-side Supabase client - safe to use in browser
 export const createBrowserClient = () => {
   const { supabaseUrl, supabaseKey } = getSupabaseConfig();
@@ -82,47 +97,33 @@ export const db = {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
         .from('users')
-        .select('id, first_name, last_name, created_at, updated_at')
+        .select('id, full_name, created_at, updated_at')
         .eq('id', userId)
         .single();
 
       if (error) throw error;
 
       if (!data) return null;
-
-      return {
-        id: data.id,
-        user_id: data.id,
-        first_name: data.first_name || '',
-        last_name: data.last_name || '',
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-      } as UserProfile;
+      return mapUserProfile(data);
     },
 
     async updateProfile(userId: string, profile: Partial<UserProfile>): Promise<UserProfile> {
-      const supabase = createBrowserClient();
-      const updatePayload: any = { updated_at: new Date().toISOString() };
-      if (profile.first_name !== undefined) updatePayload.first_name = profile.first_name;
-      if (profile.last_name !== undefined) updatePayload.last_name = profile.last_name;
+      const current = await db.users.getProfile(userId);
+      const fullName = profile.full_name ?? [
+        profile.first_name ?? current?.first_name,
+        profile.last_name ?? current?.last_name,
+      ].filter(Boolean).join(' ');
+      const response = await fetch('/api/auth/complete-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to save profile');
 
-      const { data, error } = await supabase
-        .from('users')
-        .update(updatePayload)
-        .eq('id', userId)
-        .select('id, first_name, last_name, created_at, updated_at')
-        .single();
-
-      if (error) throw error;
-
-      return {
-        id: data.id,
-        user_id: data.id,
-        first_name: data.first_name || '',
-        last_name: data.last_name || '',
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-      } as UserProfile;
+      const updatedProfile = await db.users.getProfile(userId);
+      if (!updatedProfile) throw new Error('Profile update could not be verified');
+      return updatedProfile;
     },
   },
 

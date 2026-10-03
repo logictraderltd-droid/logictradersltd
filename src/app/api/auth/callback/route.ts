@@ -47,11 +47,11 @@ export async function GET(request: Request) {
           } else {
             const { data: userRow, error: userErr } = await supabase
               .from('users')
-              .select('first_name, last_name, role')
+              .select('full_name, role')
               .eq('id', session.user.id)
               .maybeSingle();
 
-            if (!userErr && userRow && (!userRow.first_name || !userRow.last_name)) {
+            if (!userErr && userRow && !userRow.full_name?.trim()) {
               return NextResponse.redirect(`${appUrl}/complete-profile`);
             }
             if (!userErr) userRole = userRow?.role ?? null;
