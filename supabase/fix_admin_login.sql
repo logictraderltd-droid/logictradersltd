@@ -1,6 +1,17 @@
 -- Run this in Supabase SQL Editor.
 -- The SQL editor can see the row, but the browser cannot because of RLS.
 
+-- Ensure the designated administrator has an admin row, even if the auth
+-- trigger did not create one when the account was first registered.
+INSERT INTO public.users (id, email, role)
+SELECT id, email, 'admin'
+FROM auth.users
+WHERE lower(email) = lower('logictraderltd@gmail.com')
+ON CONFLICT (id) DO UPDATE
+SET email = EXCLUDED.email,
+    role = 'admin',
+    updated_at = NOW();
+
 CREATE OR REPLACE FUNCTION public.is_admin_user()
 RETURNS BOOLEAN
 LANGUAGE SQL
@@ -38,4 +49,4 @@ WHERE schemaname = 'public' AND tablename = 'users';
 
 SELECT id, email, role
 FROM public.users
-WHERE email = 'hackerityearone@gmail.com';
+WHERE lower(email) = lower('logictraderltd@gmail.com');
