@@ -188,7 +188,7 @@ export default function SignalsPage() {
 
                     {/* CTA Button */}
                     <Link
-                      href={`/checkout?product=${plan.id}`}
+                      href={`/signals/${plan.id}`}
                       className={`w-full flex items-center justify-center space-x-2 py-3 rounded-lg font-medium transition-all ${
                         plan.metadata?.popular
                           ? "gold-button"

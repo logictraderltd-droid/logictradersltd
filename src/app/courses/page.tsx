@@ -9,6 +9,12 @@ import { Course } from "@/types";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
+function getYouTubeEmbedUrl(url?: string) {
+  if (!url) return null;
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([^?&/]+)/);
+  return match ? `https://www.youtube.com/embed/${match[1]}?rel=0` : null;
+}
+
 export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -119,12 +125,32 @@ export default function CoursesPage() {
                   className="dark-card overflow-hidden group"
                 >
                   {/* Thumbnail */}
-                  <div className="relative h-48 bg-gradient-to-br from-dark-800 to-dark-900 overflow-hidden">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-16 h-16 rounded-full bg-gold-500/20 flex items-center justify-center group-hover:bg-gold-500/30 transition-colors">
-                        <Play className="w-8 h-8 text-gold-400" />
+                  <div className="relative h-48 bg-dark-900 overflow-hidden">
+                    {getYouTubeEmbedUrl(course.metadata?.video_url) ? (
+                      <iframe
+                        className="h-full w-full"
+                        src={getYouTubeEmbedUrl(course.metadata?.video_url) || undefined}
+                        title={course.name}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : course.metadata?.video_url ? (
+                      <video
+                        className="h-full w-full object-cover"
+                        src={course.metadata.video_url}
+                        poster={course.thumbnail_url}
+                        controls
+                        preload="metadata"
+                      />
+                    ) : course.thumbnail_url ? (
+                      <img src={course.thumbnail_url} alt={course.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-gold-500/20 flex items-center justify-center group-hover:bg-gold-500/30 transition-colors">
+                          <Play className="w-8 h-8 text-gold-400" />
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-dark-950/80 text-xs font-medium text-gold-400">
                       {course.metadata?.level || "All Levels"}
                     </div>
@@ -148,20 +174,20 @@ export default function CoursesPage() {
                       </div>
                       <div className="flex items-center space-x-1">
                         <BarChart className="w-4 h-4" />
-                        <span>{course.metadata?.lessons || "Multiple"} lessons</span>
+                        <span>{course.metadata?.lessons || "Flexible"} lessons</span>
                       </div>
                     </div>
 
                     {/* Price & CTA */}
                     <div className="flex items-center justify-between pt-4 border-t border-dark-800">
                       <div className="text-2xl font-bold gold-gradient-text">
-                        ${course.price}
+                        ${Number(course.price || 0).toFixed(2)}
                       </div>
                       <Link
-                        href={`/checkout?product=${course.id}`}
+                        href={`/courses/${course.id}`}
                         className="flex items-center space-x-1 text-gold-400 hover:text-gold-300 transition-colors"
                       >
-                        <span className="text-sm font-medium">Enroll Now</span>
+                        <span className="text-sm font-medium">Learn More</span>
                         <ArrowRight className="w-4 h-4" />
                       </Link>
                     </div>

@@ -205,7 +205,7 @@ export default function BotsPage() {
                         ${bot.price}
                       </div>
                       <Link
-                        href={`/checkout?product=${bot.id}`}
+                        href={`/bots/${bot.id}`}
                         className="flex items-center space-x-2 px-6 py-2 rounded-lg bg-gold-500/10 text-gold-400 hover:bg-gold-500/20 transition-all"
                       >
                         <Download className="w-4 h-4" />
