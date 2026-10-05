@@ -50,15 +50,15 @@ export interface Course extends Product {
 
 export interface CourseLesson {
   id: string;
-  course_id: string;
+  product_id: string;
   title: string;
   description?: string;
   video_url: string;
-  cloudinary_public_id?: string;
-  duration?: string;
-  order_index: number;
-  is_preview?: boolean;
+  thumbnail_url?: string | null;
+  duration_seconds?: number | null;
+  sort_order?: number | null;
   created_at: string;
+  updated_at?: string;
 }
 
 // Signal Types

@@ -78,9 +78,9 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
         title: "",
         description: "",
         video_url: "",
-        cloudinary_public_id: "",
-        order_index: 0,
-        is_preview: false
+        thumbnail_url: "",
+        duration_seconds: "",
+        sort_order: 0,
     });
 
     const handleOpenModal = (product?: Product) => {
@@ -302,10 +302,10 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
         setIsLoading(true);
         const supabase = createBrowserClient();
         const { data, error } = await supabase
-            .from('course_lessons')
+            .from('course_videos')
             .select('*')
-            .eq('course_id', courseId)
-            .order('order_index', { ascending: true });
+            .eq('product_id', courseId)
+            .order('sort_order', { ascending: true });
 
         if (error) {
             setNotification({ type: 'error', message: 'Failed to fetch lessons' });
@@ -319,11 +319,15 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
         e.preventDefault();
         if (!activeCourseForLessons) return;
         setIsLoading(true);
-        // Build payload from form. Normalize numeric values.
+        const durationValue = Number(lessonForm.duration_seconds);
         const payload = {
-            ...lessonForm,
-            order_index: Number.isFinite(Number(lessonForm.order_index)) ? Number(lessonForm.order_index) : 0,
-            course_id: activeCourseForLessons.id
+            product_id: activeCourseForLessons.id,
+            title: lessonForm.title.trim(),
+            description: lessonForm.description.trim() || null,
+            video_url: lessonForm.video_url.trim(),
+            thumbnail_url: lessonForm.thumbnail_url.trim() || null,
+            duration_seconds: lessonForm.duration_seconds && Number.isFinite(durationValue) ? durationValue : null,
+            sort_order: Number.isFinite(Number(lessonForm.sort_order)) ? Number(lessonForm.sort_order) : 0,
         };
 
         try {
@@ -331,14 +335,14 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
 
             if (editingLesson) {
                 const { error } = await supabase
-                    .from('course_lessons')
+                    .from('course_videos')
                     .update(payload)
                     .eq('id', editingLesson.id);
                 if (error) throw error;
                 setNotification({ type: 'success', message: 'Lesson updated successfully' });
             } else {
                 const { error } = await supabase
-                    .from('course_lessons')
+                    .from('course_videos')
                     .insert([payload]);
                 if (error) throw error;
                 setNotification({ type: 'success', message: 'Lesson created successfully' });
@@ -362,7 +366,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
         const supabase = createBrowserClient();
         try {
             const { error } = await supabase
-                .from('course_lessons')
+                .from('course_videos')
                 .delete()
                 .eq('id', lessonId);
             if (error) throw error;
@@ -777,6 +781,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                                     />
                                                     <CldUploadWidget
                                                         uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"}
+                                                        options={{ resourceType: "video" }}
                                                         onSuccess={(result: any) => {
                                                             if (result.info?.secure_url) setVideoUrl(result.info.secure_url);
                                                         }}
@@ -1082,7 +1087,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                         <h4 className="font-bold text-gray-400 uppercase tracking-widest text-xs">Course Lessons ({lessons.length})</h4>
                                         <button
                                             onClick={() => {
-                                                setLessonForm({ title: "", description: "", video_url: "", cloudinary_public_id: "", order_index: lessons.length + 1, is_preview: false });
+                                                setLessonForm({ title: "", description: "", video_url: "", thumbnail_url: "", duration_seconds: "", sort_order: lessons.length + 1 });
                                                 setEditingLesson(null);
                                                 setIsAddingLesson(true);
                                             }}
@@ -1096,14 +1101,13 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                         {lessons.map((lesson, idx) => (
                                             <div key={lesson.id} className="bg-dark-950 border border-dark-800 rounded-xl p-4 flex items-center gap-4 group">
                                                 <div className="w-8 h-8 rounded-lg bg-dark-800 flex items-center justify-center font-mono font-bold text-gray-500">
-                                                    {lesson.order_index}
+                                                    {lesson.sort_order}
                                                 </div>
                                                 <div className="flex-1">
                                                     <h5 className="font-bold text-white group-hover:text-purple-400 transition-colors">{lesson.title}</h5>
                                                     <p className="text-xs text-gray-500 line-clamp-1">{lesson.description || 'No description provided.'}</p>
                                                 </div>
                                                 <div className="flex items-center gap-4 text-xs">
-                                                    {lesson.is_preview && <span className="px-2 py-0.5 bg-gold-500/10 text-gold-500 border border-gold-500/20 rounded">Preview</span>}
                                                     <div className="flex gap-2">
                                                         <button
                                                             onClick={() => {
@@ -1112,9 +1116,9 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                                                     title: lesson.title,
                                                                     description: lesson.description || "",
                                                                     video_url: lesson.video_url || "",
-                                                                    cloudinary_public_id: (lesson as any).cloudinary_public_id || "",
-                                                                    order_index: lesson.order_index,
-                                                                    is_preview: lesson.is_preview || false
+                                                                    thumbnail_url: lesson.thumbnail_url || "",
+                                                                    duration_seconds: lesson.duration_seconds == null ? "" : String(lesson.duration_seconds),
+                                                                    sort_order: lesson.sort_order ?? 0,
                                                                 });
                                                                 setIsAddingLesson(true);
                                                             }}
@@ -1174,12 +1178,12 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                                 />
                                                 <CldUploadWidget
                                                     uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"}
+                                                    options={{ resourceType: "video" }}
                                                     onSuccess={(result: any) => {
                                                         if (result.info?.secure_url) {
                                                             setLessonForm({
                                                                 ...lessonForm,
                                                                 video_url: result.info.secure_url,
-                                                                cloudinary_public_id: result.info.public_id
                                                             });
                                                         }
                                                     }}
@@ -1193,23 +1197,36 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-gray-400">Order Index</label>
+                                            <label className="text-sm font-medium text-gray-400">Sort Order</label>
                                             <input
                                                 type="number"
                                                 required
-                                                value={lessonForm.order_index}
-                                                onChange={(e) => setLessonForm({ ...lessonForm, order_index: parseInt(e.target.value) })}
+                                                min="0"
+                                                value={lessonForm.sort_order}
+                                                onChange={(e) => setLessonForm({ ...lessonForm, sort_order: parseInt(e.target.value) || 0 })}
                                                 className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:border-purple-500/50 outline-none"
                                             />
                                         </div>
-                                        <div className="flex items-center gap-3 pt-8">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-400">Duration (seconds)</label>
                                             <input
-                                                type="checkbox"
-                                                checked={lessonForm.is_preview}
-                                                onChange={(e) => setLessonForm({ ...lessonForm, is_preview: e.target.checked })}
-                                                className="w-5 h-5 rounded bg-dark-950 border-dark-800 text-purple-600 focus:ring-purple-500"
+                                                type="number"
+                                                min="0"
+                                                value={lessonForm.duration_seconds}
+                                                onChange={(e) => setLessonForm({ ...lessonForm, duration_seconds: e.target.value })}
+                                                className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:border-purple-500/50 outline-none"
+                                                placeholder="Optional"
                                             />
-                                            <label className="text-sm text-gray-300 font-medium">Free Preview Lesson</label>
+                                        </div>
+                                        <div className="space-y-2 md:col-span-2">
+                                            <label className="text-sm font-medium text-gray-400">Thumbnail URL (optional)</label>
+                                            <input
+                                                type="url"
+                                                value={lessonForm.thumbnail_url}
+                                                onChange={(e) => setLessonForm({ ...lessonForm, thumbnail_url: e.target.value })}
+                                                className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:border-purple-500/50 outline-none"
+                                                placeholder="https://..."
+                                            />
                                         </div>
                                         <div className="space-y-2 md:col-span-2">
                                             <label className="text-sm font-medium text-gray-400">Lesson Description</label>

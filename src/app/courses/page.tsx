@@ -35,7 +35,11 @@ export default function CoursesPage() {
       } else {
         setCourses((data || [])
           .filter((item: any) => (item.product_type ?? item.type ?? "").toString().toLowerCase() === "course")
-          .map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "course" })));
+          .map((item: any) => ({
+            ...item,
+            type: item.product_type ?? "course",
+            price: Number(item.price ?? (Number(item.price_cents ?? 0) / 100)),
+          })));
       }
       setIsLoading(false);
     };

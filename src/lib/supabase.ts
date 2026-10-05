@@ -23,7 +23,7 @@ export function getSupabaseServiceRoleKey() {
   return serviceRoleKey;
 }
 
-export const productTypeFilter = (type: string) => `type.eq.${type},product_type.eq.${type}`;
+export const productTypeFilter = (type: string) => `product_type.eq.${type}`;
 
 export const normalizeProductRow = (product: any): Product => {
   const productType = product?.product_type ?? product?.type ?? 'course';
@@ -175,7 +175,7 @@ export const db = {
         .from('products')
         .select(`
           *,
-          lessons:course_lessons(*)
+          lessons:course_videos(*)
         `)
         .or(productTypeFilter('course'))
         .eq('is_active', true)
@@ -191,7 +191,7 @@ export const db = {
         .from('products')
         .select(`
           *,
-          lessons:course_lessons(*)
+          lessons:course_videos(*)
         `)
         .eq('id', id)
         .or(productTypeFilter('course'))
@@ -204,10 +204,10 @@ export const db = {
     async getLessons(courseId: string): Promise<CourseLesson[]> {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
-        .from('course_lessons')
+        .from('course_videos')
         .select('*')
-        .eq('course_id', courseId)
-        .order('order_index', { ascending: true });
+        .eq('product_id', courseId)
+        .order('sort_order', { ascending: true });
 
       if (error) throw error;
       return data || [];

@@ -6,8 +6,6 @@ import { ArrowLeft, Play, Lock, CheckCircle, Clock, BookOpen, Download, AlertCir
 import { createBrowserClient } from "@/lib/supabase";
 import { Course, CourseLesson } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
-import { CldVideoPlayer } from 'next-cloudinary';
-import 'next-cloudinary/dist/cld-video-player.css';
 
 export default function CourseViewerPage() {
     const params = useParams();
@@ -75,10 +73,10 @@ export default function CourseViewerPage() {
 
                 // 3. Fetch lessons
                 const { data: lessonsData, error: lessonsError } = await supabase
-                    .from('course_lessons')
+                    .from('course_videos')
                     .select('*')
-                    .eq('course_id', params.courseId)
-                    .order('order_index', { ascending: true });
+                    .eq('product_id', params.courseId)
+                    .order('sort_order', { ascending: true });
 
                 if (lessonsError) throw lessonsError;
 
@@ -251,24 +249,13 @@ export default function CourseViewerPage() {
                                 </div>
                             ) : activeLesson ? (
                                 <div className="absolute inset-0 z-10" key={activeLesson.id}>
-                                    {activeLesson.cloudinary_public_id ? (
-                                        <CldVideoPlayer
-                                            width="1920"
-                                            height="1080"
-                                            src={activeLesson.cloudinary_public_id}
-                                            colors={{ accent: '#EAB308', base: '#000000', text: '#ffffff' }}
-                                            fontFace="Inter"
-                                            className="w-full h-full"
-                                        />
-                                    ) : (
-                                        <video
-                                            src={activeLesson.video_url}
-                                            controls
-                                            autoPlay
-                                            className="w-full h-full object-contain bg-black"
-                                            poster={course.thumbnail_url}
-                                        />
-                                    )}
+                                    <video
+                                        src={activeLesson.video_url}
+                                        controls
+                                        autoPlay
+                                        className="w-full h-full object-contain bg-black"
+                                        poster={activeLesson.thumbnail_url || course.thumbnail_url}
+                                    />
                                 </div>
                             ) : (
                                 <div className="absolute inset-0 flex items-center justify-center bg-dark-900 font-display">
@@ -284,7 +271,7 @@ export default function CourseViewerPage() {
                                 <div className="flex items-center gap-3 text-sm text-gray-500">
                                     <span className="flex items-center gap-1.5"><List className="w-4 h-4" />Module {currentIndex + 1} of {lessons.length}</span>
                                     <span>•</span>
-                                    <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />{activeLesson?.duration || 'Self-paced'}</span>
+                                    <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />{activeLesson?.duration_seconds != null ? `${Math.floor(activeLesson.duration_seconds / 60)}:${String(activeLesson.duration_seconds % 60).padStart(2, '0')}` : 'Self-paced'}</span>
                                 </div>
                             </div>
 

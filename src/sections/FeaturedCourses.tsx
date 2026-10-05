@@ -63,7 +63,11 @@ export default function FeaturedCourses() {
           return productType === "course";
         }).slice(0, 3);
 
-        setCourses(courseItems.map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "course" })));
+        setCourses(courseItems.map((item: any) => ({
+          ...item,
+          type: item.product_type ?? "course",
+          price: Number(item.price ?? (Number(item.price_cents ?? 0) / 100)),
+        })));
       } catch (error) {
         console.error("Unable to load featured courses:", error);
         setCourses([]);

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { createBrowserClient } from "@/lib/supabase";
+import { createBrowserClient, normalizeProductRows } from "@/lib/supabase";
 import { User, Product, Order, TradingSignal } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -114,7 +114,7 @@ export default function AdminDashboard() {
         setUsers(data || []);
       } else if (activeTab === "products") {
         const { data } = await supabase.from("products").select("*").order("created_at", { ascending: false });
-        setProducts((data || []).map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "course" })));
+        setProducts(normalizeProductRows(data || []));
       } else if (activeTab === "orders") {
         const { data } = await supabase.from("orders").select(`*, product:products(name), user:users(email)`).order("created_at", { ascending: false });
         setOrders(data || []);

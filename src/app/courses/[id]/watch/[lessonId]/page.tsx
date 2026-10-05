@@ -17,13 +17,13 @@ import { createBrowserClient } from "@/lib/supabase";
 
 interface CourseLesson {
   id: string;
+  product_id: string;
   title: string;
   description: string;
   video_url: string;
-  duration: number;
-  order_index: number;
-  is_preview: boolean;
-  course_id: string;
+  thumbnail_url?: string | null;
+  duration_seconds?: number | null;
+  sort_order?: number | null;
 }
 
 interface Course {
@@ -73,7 +73,7 @@ export default function WatchLessonPage({
     try {
       // Fetch current lesson
       const { data: lessonData, error: lessonError } = await supabase
-        .from("course_lessons")
+        .from("course_videos")
         .select("*")
         .eq("id", params.lessonId)
         .single();
@@ -85,17 +85,17 @@ export default function WatchLessonPage({
       const { data: courseData } = await supabase
         .from("products")
         .select("id, name")
-        .eq("id", lessonData.course_id)
+        .eq("id", lessonData.product_id)
         .single();
 
       setCourse(courseData);
 
       // Fetch all lessons for navigation
       const { data: lessonsData } = await supabase
-        .from("course_lessons")
+        .from("course_videos")
         .select("*")
-        .eq("course_id", lessonData.course_id)
-        .order("order_index", { ascending: true });
+        .eq("product_id", lessonData.product_id)
+        .order("sort_order", { ascending: true });
 
       setAllLessons(lessonsData || []);
 
@@ -105,11 +105,11 @@ export default function WatchLessonPage({
           .from("user_access")
           .select("*")
           .eq("user_id", user.id)
-          .eq("product_id", lessonData.course_id)
+          .eq("product_id", lessonData.product_id)
           .eq("is_active", true)
           .single();
 
-        const access = !!accessData || lessonData.is_preview;
+        const access = !!accessData;
         setHasAccess(access);
 
         if (access) {
@@ -332,11 +332,6 @@ export default function WatchLessonPage({
                 {currentLesson.description && (
                   <p className="text-gray-300 mb-6">{currentLesson.description}</p>
                 )}
-                {currentLesson.is_preview && (
-                  <div className="inline-flex items-center px-3 py-1 rounded-full bg-gold-500/20 text-gold-400 text-sm">
-                    Preview Lesson
-                  </div>
-                )}
               </motion.div>
             </div>
 
@@ -348,7 +343,7 @@ export default function WatchLessonPage({
                   {allLessons.map((lesson) => {
                     const isCompleted = false; // TODO: Check completion status
                     const isCurrent = lesson.id === params.lessonId;
-                    const canAccess = lesson.is_preview || hasAccess;
+                    const canAccess = hasAccess;
 
                     return (
                       <button
@@ -379,10 +374,10 @@ export default function WatchLessonPage({
                             >
                               {lesson.title}
                             </p>
-                            {lesson.duration && (
+                            {lesson.duration_seconds != null && (
                               <p className="text-xs text-gray-500 mt-1">
-                                {Math.floor(lesson.duration / 60)}:
-                                {String(lesson.duration % 60).padStart(2, "0")}
+                                {Math.floor(lesson.duration_seconds / 60)}:
+                                {String(lesson.duration_seconds % 60).padStart(2, "0")}
                               </p>
                             )}
                           </div>

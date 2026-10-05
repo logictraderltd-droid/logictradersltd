@@ -19,11 +19,13 @@ import { createBrowserClient } from "@/lib/supabase";
 
 interface CourseLesson {
   id: string;
+  product_id: string;
   title: string;
   description: string;
-  duration: number;
-  order_index: number;
-  is_preview: boolean;
+  video_url: string;
+  thumbnail_url?: string | null;
+  duration_seconds?: number | null;
+  sort_order?: number | null;
 }
 
 interface Course {
@@ -68,14 +70,18 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         .single();
 
       if (courseError) throw courseError;
-      setCourse(courseData ? { ...courseData, type: courseData.product_type ?? courseData.type ?? "course" } : null);
+      setCourse(courseData ? {
+        ...courseData,
+        type: courseData.product_type ?? "course",
+        price: Number(courseData.price ?? (Number(courseData.price_cents ?? 0) / 100)),
+      } : null);
 
       // Fetch course lessons
       const { data: lessonsData, error: lessonsError } = await supabase
-        .from("course_lessons")
+        .from("course_videos")
         .select("*")
-        .eq("course_id", params.id)
-        .order("order_index", { ascending: true });
+        .eq("product_id", params.id)
+        .order("sort_order", { ascending: true });
 
       if (lessonsError) throw lessonsError;
       setLessons(lessonsData || []);
@@ -132,7 +138,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     );
   }
 
-  const totalDuration = lessons.reduce((acc, lesson) => acc + (lesson.duration || 0), 0);
+  const totalDuration = lessons.reduce((acc, lesson) => acc + (lesson.duration_seconds || 0), 0);
   const hours = Math.floor(totalDuration / 3600);
   const minutes = Math.floor((totalDuration % 3600) / 60);
 
@@ -271,22 +277,20 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                   {lessons.map((lesson, index) => (
                     <div
                       key={lesson.id}
-                      className={`p-4 rounded-lg border transition-colors ${lesson.is_preview || hasAccess
+                      className={`p-4 rounded-lg border transition-colors ${hasAccess
                         ? "border-dark-700 hover:border-gold-500/50 hover:bg-dark-800 cursor-pointer"
                         : "border-dark-800 bg-dark-900/50"
                         }`}
                       onClick={() => {
                         if (hasAccess) {
                           router.push(`/dashboard/courses/${params.id}`);
-                        } else if (lesson.is_preview) {
-                          router.push(`/courses/${params.id}/watch/${lesson.id}`);
                         }
                       }}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
                           <div className="w-10 h-10 rounded-lg bg-dark-800 flex items-center justify-center">
-                            {lesson.is_preview || hasAccess ? (
+                            {hasAccess ? (
                               <Play className="w-5 h-5 text-gold-400" />
                             ) : (
                               <Lock className="w-5 h-5 text-gray-600" />
@@ -304,15 +308,10 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                           </div>
                         </div>
                         <div className="flex items-center space-x-4">
-                          {lesson.is_preview && (
-                            <span className="px-2 py-1 rounded bg-gold-500/20 text-gold-400 text-xs">
-                              Preview
-                            </span>
-                          )}
-                          {lesson.duration && (
+                          {lesson.duration_seconds != null && (
                             <span className="text-sm text-gray-400">
-                              {Math.floor(lesson.duration / 60)}:
-                              {String(lesson.duration % 60).padStart(2, "0")}
+                              {Math.floor(lesson.duration_seconds / 60)}:
+                              {String(lesson.duration_seconds % 60).padStart(2, "0")}
                             </span>
                           )}
                         </div>
