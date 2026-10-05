@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Play, Video, Volume2, VolumeX, Youtube, Instagram, Facebook, Send, Music2, Globe } from "lucide-react";
+import { ArrowRight, Play, Video, Volume2, VolumeX, Youtube, Instagram, Facebook, Send, Music2, Globe, Maximize2, Minimize2 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 
 interface ShortVideo {
@@ -25,6 +25,14 @@ interface StoredSocialLink {
 
 const defaultShorts: ShortVideo[] = [];
 const defaultSocialLinks: Array<{ label: string; icon: any; href: string }> = [];
+const shortsNavigation = [
+  { label: "Home", href: "/" },
+  { label: "Courses", href: "/courses" },
+  { label: "Signals", href: "/signals" },
+  { label: "Bots", href: "/bots" },
+  { label: "Pro Firm", href: "/pricing" },
+  { label: "Dashboard", href: "/dashboard" },
+];
 
 const getSocialIcon = (platform: StoredSocialLink["platform"]) => {
   switch (platform) {
@@ -61,6 +69,69 @@ export default function Hero() {
   const [isLoadingShorts, setIsLoadingShorts] = useState(true);
   const [muted, setMuted] = useState(true);
   const [hasCustomMarketing, setHasCustomMarketing] = useState(false);
+  const [isFullscreenShorts, setIsFullscreenShorts] = useState(false);
+  const [fullscreenStartId, setFullscreenStartId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isFullscreenShorts) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsFullscreenShorts(false);
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+    if (fullscreenStartId) {
+      document.getElementById(`fullscreen-short-${fullscreenStartId}`)?.scrollIntoView({ block: "start" });
+    }
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFullscreenShorts, fullscreenStartId]);
+
+  const openFullscreenShorts = (shortId: string) => {
+    setMuted(true);
+    setFullscreenStartId(shortId);
+    setIsFullscreenShorts(true);
+  };
+
+  const renderShort = (short: ShortVideo, fullscreen = false) => (
+    <article
+      key={`${fullscreen ? "fullscreen-" : "inline-"}${short.id}`}
+      id={fullscreen ? `fullscreen-short-${short.id}` : undefined}
+      role={fullscreen ? undefined : "button"}
+      tabIndex={fullscreen ? undefined : 0}
+      onClick={() => {
+        if (!fullscreen) openFullscreenShorts(short.id);
+      }}
+      onKeyDown={(event) => {
+        if (!fullscreen && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          openFullscreenShorts(short.id);
+        }
+      }}
+      className={`relative h-full min-h-full snap-start overflow-hidden bg-black ${fullscreen ? "mx-auto w-full max-w-[520px]" : "cursor-zoom-in"}`}
+    >
+      {short.source === "youtube" ? (
+        <iframe className="h-full w-full" src={short.video_url.replace("mute=1", `mute=${muted ? "1" : "0"}`)} title={short.name} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+      ) : (
+        <video className="h-full w-full object-cover" src={short.video_url} poster={short.thumbnail_url} muted={muted} loop playsInline autoPlay />
+      )}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent p-5 pt-24">
+        <span className="mb-2 inline-block rounded-full bg-gold-500/90 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-dark-950">{short.type}</span>
+        <h3 className="text-lg font-bold text-white">{short.name}</h3>
+        <p className="mt-1 line-clamp-2 text-sm text-gray-300">{short.description}</p>
+      </div>
+      {!fullscreen && (
+        <button type="button" onClick={(event) => { event.stopPropagation(); openFullscreenShorts(short.id); }} className="absolute right-4 top-4 rounded-full border border-white/20 bg-black/65 p-2 text-white transition-colors hover:border-gold-400 hover:text-gold-300" aria-label={`Open ${short.name} fullscreen`} title="Open this short fullscreen">
+          <Maximize2 className="h-4 w-4" />
+        </button>
+      )}
+    </article>
+  );
 
   useEffect(() => {
     const loadMarketingContent = async () => {
@@ -253,29 +324,21 @@ export default function Hero() {
             <div className="relative w-full max-w-[330px] sm:max-w-[380px] mx-auto">
               <div className="mb-3 flex items-center justify-between px-1">
                 <div className="flex items-center gap-2 text-sm text-gray-300"><Video className="h-4 w-4 text-gold-400" /><span>Market shorts</span></div>
-                <button type="button" onClick={() => setMuted((value) => !value)} className="rounded-md border border-white/10 bg-dark-900/80 p-2 text-gray-400 hover:text-white" aria-label={muted ? "Unmute videos" : "Mute videos"}>
-                  {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setMuted((value) => !value)} className="rounded-md border border-white/10 bg-dark-900/80 p-2 text-gray-400 hover:text-white" aria-label={muted ? "Unmute videos" : "Mute videos"}>
+                    {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  </button>
+                  <button type="button" onClick={() => shorts[0] && openFullscreenShorts(shorts[0].id)} disabled={shorts.length === 0 || isLoadingShorts} className="rounded-md border border-white/10 bg-dark-900/80 p-2 text-gray-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" aria-label="Open shorts fullscreen" title="Open fullscreen shorts">
+                    <Maximize2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               {isLoadingShorts ? (
                 <div className="flex h-[420px] sm:h-[520px] items-center justify-center rounded-2xl border border-gold-500/20 bg-dark-900/80"><div className="spinner" /></div>
               ) : shorts.length > 0 ? (
                 <div className="shorts-feed h-[420px] sm:h-[520px] snap-y snap-mandatory overflow-y-auto rounded-2xl border border-gold-500/20 bg-dark-900/80 shadow-2xl shadow-black/30">
-                  {shorts.map((short) => (
-                    <article key={short.id} className="relative h-full min-h-full snap-start overflow-hidden bg-black">
-                      {short.source === "youtube" ? (
-                        <iframe className="h-full w-full" src={short.video_url.replace("mute=1", `mute=${muted ? "1" : "0"}`)} title={short.name} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
-                      ) : (
-                        <video className="h-full w-full object-cover" src={short.video_url} poster={short.thumbnail_url} muted={muted} loop playsInline autoPlay />
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent p-5 pt-24">
-                        <span className="mb-2 inline-block rounded-full bg-gold-500/90 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-dark-950">{short.type}</span>
-                        <h3 className="text-lg font-bold text-white">{short.name}</h3>
-                        <p className="mt-1 line-clamp-2 text-sm text-gray-300">{short.description}</p>
-                      </div>
-                    </article>
-                  ))}
+                  {shorts.map((short) => renderShort(short))}
                 </div>
               ) : (
                 <div className="flex h-[520px] flex-col items-center justify-center rounded-2xl border border-dashed border-gold-500/30 bg-dark-900/80 p-8 text-center">
@@ -289,6 +352,32 @@ export default function Hero() {
           </motion.div>
         </div>
       </div>
+
+      {isFullscreenShorts && (
+        <div className="fixed inset-0 z-[60] bg-black text-white">
+          <header className="absolute inset-x-0 top-0 z-20 flex h-16 items-center gap-4 border-b border-white/10 bg-black/80 px-3 backdrop-blur-md sm:px-6">
+            <Link href="/" onClick={() => setIsFullscreenShorts(false)} className="shrink-0 text-sm font-bold text-gold-300 sm:text-base">
+              LOGIC <span className="hidden sm:inline">SHORTS</span>
+            </Link>
+            <nav aria-label="Shorts navigation" className="shorts-feed flex min-w-0 flex-1 items-center gap-4 overflow-x-auto whitespace-nowrap text-xs text-gray-300 sm:justify-center sm:gap-6 sm:text-sm">
+              {shortsNavigation.map((link) => (
+                <Link key={link.href} href={link.href} onClick={() => setIsFullscreenShorts(false)} className="transition-colors hover:text-gold-300">
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+            <button type="button" onClick={() => setMuted((value) => !value)} className="shrink-0 rounded-md border border-white/15 p-2 text-gray-300 hover:text-white" aria-label={muted ? "Unmute videos" : "Mute videos"}>
+              {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </button>
+            <button type="button" onClick={() => setIsFullscreenShorts(false)} className="shrink-0 rounded-md border border-white/15 p-2 text-gray-300 hover:text-white" aria-label="Exit fullscreen shorts" title="Exit fullscreen">
+              <Minimize2 className="h-4 w-4" />
+            </button>
+          </header>
+          <div className="shorts-feed absolute inset-x-0 bottom-0 top-16 snap-y snap-mandatory overflow-y-auto overscroll-contain">
+            {shorts.map((short) => renderShort(short, true))}
+          </div>
+        </div>
+      )}
 
       {/* Bottom Gradient */}
       <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-dark-950 to-transparent" />
