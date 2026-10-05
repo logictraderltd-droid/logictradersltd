@@ -108,8 +108,8 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
         if (accessData) {
           // Check if subscription hasn't expired
           if (
-            !accessData.access_expires_at ||
-            new Date(accessData.access_expires_at) > new Date()
+            !accessData.expires_at ||
+            new Date(accessData.expires_at) > new Date()
           ) {
             setHasAccess(true);
           }

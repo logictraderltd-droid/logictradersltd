@@ -365,7 +365,7 @@ export const db = {
         .select('*')
         .eq('user_id', userId)
         .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('granted_at', { ascending: false });
 
       if (error) throw error;
       return data || [];
@@ -379,7 +379,7 @@ export const db = {
         .eq('user_id', userId)
         .eq('product_id', productId)
         .eq('is_active', true)
-        .or('access_expires_at.is.null,access_expires_at.gte.' + new Date().toISOString())
+        .or('expires_at.is.null,expires_at.gte.' + new Date().toISOString())
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
@@ -402,7 +402,7 @@ export const db = {
       const supabase = createBrowserClient();
       const { error } = await supabase
         .from('user_access')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .update({ is_active: false })
         .eq('user_id', userId)
         .eq('product_id', productId);
 

@@ -25,7 +25,7 @@ export async function GET(
 
     const { data: access, error: accessError } = await supabase
       .from('user_access')
-      .select('access_expires_at')
+      .select('expires_at')
       .eq('user_id', user.id)
       .eq('product_id', video.product_id)
       .eq('is_active', true)
@@ -35,7 +35,7 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied. Please purchase this course first.' }, { status: 403 });
     }
 
-    if (access.access_expires_at && new Date(access.access_expires_at) < new Date()) {
+    if (access.expires_at && new Date(access.expires_at) < new Date()) {
       return NextResponse.json({ error: 'Your access to this content has expired.' }, { status: 403 });
     }
 
@@ -81,13 +81,13 @@ export async function POST(
 
     const { data: access, error: accessError } = await supabase
       .from('user_access')
-      .select('access_expires_at')
+      .select('expires_at')
       .eq('user_id', user.id)
       .eq('product_id', video.product_id)
       .eq('is_active', true)
       .maybeSingle();
 
-    if (accessError || !access || (access.access_expires_at && new Date(access.access_expires_at) < new Date())) {
+    if (accessError || !access || (access.expires_at && new Date(access.expires_at) < new Date())) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

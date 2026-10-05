@@ -78,11 +78,8 @@ export async function POST(request: Request) {
                 const { error: accessError } = await supabase.from('user_access').insert({
                     user_id: session.metadata.user_id,
                     product_id: session.metadata.product_id,
-                    product_type: session.metadata.product_type || 'course',
                     is_active: true,
-                    granted_by: 'payment',
                     order_id: orderId
-                    // starts_at removed
                 });
 
                 if (accessError) {

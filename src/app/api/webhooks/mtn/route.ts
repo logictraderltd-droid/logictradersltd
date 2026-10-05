@@ -120,11 +120,8 @@ export async function POST(request: NextRequest) {
           .upsert({
             user_id: order.user_id,
             product_id: product.id,
-            product_type: product.type,
-            access_granted_at: new Date().toISOString(),
-            access_expires_at: accessExpiresAt,
+            expires_at: accessExpiresAt,
             is_active: true,
-            granted_by: 'payment',
             order_id: order.id,
           }, {
             onConflict: 'user_id,product_id',

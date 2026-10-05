@@ -159,7 +159,7 @@ export async function checkProductAccess(
     .eq('user_id', user.id)
     .eq('product_id', productId)
     .eq('is_active', true)
-    .or('access_expires_at.is.null,access_expires_at.gte.' + new Date().toISOString())
+    .or('expires_at.is.null,expires_at.gte.' + new Date().toISOString())
     .single();
 
   if (error && error.code !== 'PGRST116') {

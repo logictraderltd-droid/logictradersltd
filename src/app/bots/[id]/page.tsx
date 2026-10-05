@@ -90,8 +90,8 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
 
         if (accessData) {
           if (
-            !accessData.access_expires_at ||
-            new Date(accessData.access_expires_at) > new Date()
+            !accessData.expires_at ||
+            new Date(accessData.expires_at) > new Date()
           ) {
             setHasAccess(true);
           }

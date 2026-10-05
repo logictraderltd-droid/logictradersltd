@@ -140,15 +140,11 @@ export interface UserAccess {
   id: string;
   user_id: string;
   product_id: string;
-  product_type: ProductType;
-  access_granted_at: string;
-  access_expires_at?: string;
-  is_active: boolean;
-  granted_by: 'payment' | 'manual' | 'subscription';
-  order_id?: string;
-  subscription_id?: string;
-  created_at: string;
-  updated_at: string;
+  order_id?: string | null;
+  granted_at?: string | null;
+  expires_at?: string | null;
+  is_active: boolean | null;
+  granted_by?: string | null;
 }
 
 // API Response Types

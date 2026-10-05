@@ -30,6 +30,6 @@ CREATE POLICY "Enrolled users can view course videos" ON public.course_videos
       WHERE user_access.user_id = auth.uid()
         AND user_access.product_id = course_videos.product_id
         AND user_access.is_active = true
-        AND (user_access.access_expires_at IS NULL OR user_access.access_expires_at > NOW())
+        AND (user_access.expires_at IS NULL OR user_access.expires_at > NOW())
     )
   );

@@ -67,15 +67,14 @@ export async function POST(request: Request) {
             if (paymentError) console.error('Error creating payment record:', paymentError);
 
             // 2. Grant Access
-            if (session.metadata?.user_id && session.metadata?.product_id && session.metadata?.product_type) {
+            if (session.metadata?.user_id && session.metadata?.product_id) {
               const { error: accessError } = await supabase
                 .from('user_access')
                 .upsert({
                   user_id: session.metadata.user_id,
                   product_id: session.metadata.product_id,
-                  product_type: session.metadata.product_type,
                   is_active: true,
-                  starts_at: new Date().toISOString()
+                  order_id: orderId,
                 }, { onConflict: 'user_id,product_id' });
               // ...
 
@@ -121,8 +120,8 @@ export async function POST(request: Request) {
           await supabase.from('user_access').insert({
             user_id: paymentIntent.metadata.user_id,
             product_id: paymentIntent.metadata.product_id,
-            product_type: paymentIntent.metadata.product_type || 'course', // fallback
-            is_active: true
+            order_id: paymentIntent.metadata.order_id,
+            is_active: true,
           });
         }
 

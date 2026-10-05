@@ -51,8 +51,8 @@ export async function GET(
     }
 
     // Check if access has expired
-    if (accessData.access_expires_at) {
-      const expiryDate = new Date(accessData.access_expires_at);
+    if (accessData.expires_at) {
+      const expiryDate = new Date(accessData.expires_at);
       if (expiryDate < new Date()) {
         return NextResponse.json(
           { error: 'Your access to this content has expired.' },
