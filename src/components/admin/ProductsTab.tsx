@@ -293,26 +293,30 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
     };
 
     const handleManageLessons = async (product: Product) => {
+        setNotification(null);
         setActiveCourseForLessons(product);
         setIsLessonsModalOpen(true);
-        fetchLessons(product.id);
+        await fetchLessons(product.id);
     };
 
     const fetchLessons = async (courseId: string) => {
         setIsLoading(true);
-        const supabase = createBrowserClient();
-        const { data, error } = await supabase
-            .from('course_videos')
-            .select('*')
-            .eq('product_id', courseId)
-            .order('sort_order', { ascending: true });
+        try {
+            const supabase = createBrowserClient();
+            const { data, error } = await supabase
+                .from('course_videos')
+                .select('*')
+                .eq('product_id', courseId)
+                .order('sort_order', { ascending: true });
 
-        if (error) {
-            setNotification({ type: 'error', message: 'Failed to fetch lessons' });
-        } else {
+            if (error) throw error;
             setLessons(data || []);
+        } catch (error: any) {
+            console.error('Failed to fetch course videos:', error);
+            setNotification({ type: 'error', message: error.message || 'Failed to fetch lessons.' });
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     const handleSaveLesson = async (e: React.FormEvent) => {
@@ -1081,6 +1085,11 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-6">
+                            {notification && (
+                                <div role="alert" className={`mb-5 rounded-xl border p-4 text-sm ${notification.type === 'success' ? 'border-green-500/30 bg-green-500/10 text-green-300' : 'border-red-500/30 bg-red-500/10 text-red-300'}`}>
+                                    {notification.message}
+                                </div>
+                            )}
                             {!isAddingLesson ? (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center mb-6">
