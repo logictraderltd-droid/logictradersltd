@@ -51,30 +51,9 @@ CREATE POLICY "Admin can view all users" ON users
 CREATE POLICY "Admin can manage all users" ON users
   FOR ALL USING (public.is_admin_user());
 
--- Drop existing user_profiles policies and recreate them
-DROP POLICY IF EXISTS "Users can view own profile" ON user_profiles;
-DROP POLICY IF EXISTS "Users can insert own profile" ON user_profiles;
-DROP POLICY IF EXISTS "Users can update own profile" ON user_profiles;
-DROP POLICY IF EXISTS "Admin can manage profiles" ON user_profiles;
-
--- Recreate user_profiles policies
-CREATE POLICY "Users can view own profile" ON user_profiles
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own profile" ON user_profiles
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own profile" ON user_profiles
-  FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Admin can manage profiles" ON user_profiles
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
-  );
-
 -- Verify policies are created
 SELECT tablename, policyname, permissive, roles, cmd, qual, with_check
 FROM pg_policies
 WHERE schemaname = 'public'
-AND tablename IN ('users', 'user_profiles')
+AND tablename = 'users'
 ORDER BY tablename, policyname;
