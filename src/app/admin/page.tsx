@@ -119,12 +119,8 @@ export default function AdminDashboard() {
         const { data } = await supabase.from("orders").select(`*, product:products(name), user:users(email)`).order("created_at", { ascending: false });
         setOrders(data || []);
       } else if (activeTab === "signals") {
-        const [signalsRes, productsRes] = await Promise.all([
-          supabase.from("signals").select(`*, plan:products(name)`).order("created_at", { ascending: false }),
-          supabase.from("products").select("*")
-        ]);
-        setSignals(signalsRes.data || []);
-        setProducts(productsRes.data || []);
+        const { data } = await supabase.from("signals").select("*").order("created_at", { ascending: false });
+        setSignals(data || []);
       }
 
       dataFetchedRef.current[activeTab] = true;
@@ -242,7 +238,6 @@ export default function AdminDashboard() {
                   {activeTab === "signals" && (
                     <SignalsTab
                       signals={signals}
-                      products={products}
                       onRefresh={() => fetchTabData(true)}
                     />
                   )}

@@ -19,15 +19,10 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { createBrowserClient } from "@/lib/supabase";
 
-interface TradingBot {
-  id: string;
-  product_id: string;
-  download_url: string;
-  file_size: string;
-  setup_instructions: string;
-  requirements: string[];
-  version: string;
-  changelog: string;
+interface BotLink {
+  link_url: string;
+  download_url: string | null;
+  instructions: string | null;
 }
 
 interface Product {
@@ -42,9 +37,9 @@ interface Product {
 
 export default function BotDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isAdmin } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
-  const [bot, setBot] = useState<TradingBot | null>(null);
+  const [bot, setBot] = useState<BotLink | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [downloadToken, setDownloadToken] = useState<string | null>(null);
@@ -52,7 +47,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     fetchBotData();
-  }, [params.id, user]);
+  }, [params.id, user, isAdmin]);
 
   const fetchBotData = async () => {
     const supabase = createBrowserClient();
@@ -66,19 +61,14 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
         .single();
 
       if (productError) throw productError;
-      setProduct(productData ? { ...productData, type: productData.product_type ?? productData.type ?? "bot" } : null);
-
-      // Fetch bot details
-      const { data: botData, error: botError } = await supabase
-        .from("trading_bots")
-        .select("*")
-        .eq("product_id", params.id)
-        .single();
-
-      if (botError) throw botError;
-      setBot(botData);
+      setProduct(productData ? {
+        ...productData,
+        type: productData.product_type ?? "bot",
+        price: Number(productData.price ?? (Number(productData.price_cents ?? 0) / 100)),
+      } : null);
 
       // Check if user has access
+      let canViewBotLink = isAdmin;
       if (user) {
         const { data: accessData } = await supabase
           .from("user_access")
@@ -94,8 +84,20 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
             new Date(accessData.expires_at) > new Date()
           ) {
             setHasAccess(true);
+            canViewBotLink = true;
           }
         }
+      }
+
+      if (canViewBotLink) {
+        const { data: botLink, error: botError } = await supabase
+          .from("bot_links")
+          .select("link_url, download_url, instructions")
+          .eq("product_id", params.id)
+          .limit(1)
+          .maybeSingle();
+        if (botError) throw botError;
+        setBot(botLink);
       }
     } catch (error) {
       console.error("Error fetching bot:", error);
@@ -155,7 +157,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
     );
   }
 
-  if (!product || !bot) {
+  if (!product) {
     return (
       <div className="min-h-screen bg-dark-950 flex items-center justify-center">
         <div className="text-center">

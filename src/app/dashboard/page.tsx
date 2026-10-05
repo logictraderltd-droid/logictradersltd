@@ -162,11 +162,10 @@ function DashboardContent() {
         // Fetch signals
         let signals: TradingSignal[] = [];
         if (subscriptionsData && subscriptionsData.length > 0) {
-          const planIds = subscriptionsData.map((s) => s.plan_id);
           const { data: signalsData } = await supabase
             .from("signals")
             .select("*")
-            .in("plan_id", planIds)
+            .eq("status", "active")
             .order("created_at", { ascending: false })
             .limit(5);
           signals = signalsData || [];
@@ -391,14 +390,14 @@ function DashboardContent() {
                                         }`}>
                                         {signal.direction}
                                       </span>
-                                      <span className="font-bold text-white">{signal.symbol}</span>
+                                      <span className="font-bold text-white">{signal.pair}</span>
                                     </div>
-                                    <p className="text-sm text-gray-400">Entry: {signal.entry_price}</p>
+                                    <p className="text-sm text-gray-400">{signal.title}{signal.entry_price != null ? ` · Entry: ${signal.entry_price}` : ""}</p>
                                   </div>
                                   <div className="text-right">
                                     <span className={`text-sm font-medium ${signal.status === 'active' ? 'text-green-400' : 'text-gray-500'
                                       }`}>
-                                      {signal.status.toUpperCase()}
+                                      {(signal.status || "active").toUpperCase()}
                                     </span>
                                     <p className="text-xs text-gray-500 mt-1">
                                       {new Date(signal.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -517,11 +516,11 @@ function DashboardContent() {
                       {data.recentSignals.map((signal) => (
                         <Card key={signal.id} className="relative overflow-hidden group hover:border-gold-500/30 transition-all">
                           <div className="absolute top-0 right-0 p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${signal.status === 'active' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                              signal.status === 'closed' ? 'bg-gray-500/10 text-gray-400 border-gray-500/20' :
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${(signal.status || 'active') === 'active' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                              (signal.status || 'active') === 'closed' ? 'bg-gray-500/10 text-gray-400 border-gray-500/20' :
                                 'bg-red-500/10 text-red-400 border-red-500/20'
                               }`}>
-                              {signal.status}
+                              {signal.status || 'active'}
                             </span>
                           </div>
 
@@ -530,7 +529,8 @@ function DashboardContent() {
                               <div className="flex items-center gap-3 mb-2">
                                 <div className={`w-1.5 h-12 rounded-full ${signal.direction === 'buy' ? 'bg-green-500' : 'bg-red-500'}`} />
                                 <div>
-                                  <h3 className="text-3xl font-bold text-white">{signal.symbol}</h3>
+                                  <h3 className="text-3xl font-bold text-white">{signal.pair}</h3>
+                                  <p className="text-sm text-gray-400">{signal.title}</p>
                                   <span className={`text-sm font-bold uppercase tracking-wider ${signal.direction === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
                                     {signal.direction}
                                   </span>
@@ -545,13 +545,13 @@ function DashboardContent() {
                             <div className="flex-1 grid grid-cols-2 lg:grid-cols-3 gap-4">
                               <div className="bg-dark-900/50 p-4 rounded-xl border border-dark-800">
                                 <span className="text-gray-500 text-xs uppercase font-semibold tracking-wider block mb-1">Entry Price</span>
-                                <span className="text-white font-mono font-bold text-lg">{signal.entry_price}</span>
+                                <span className="text-white font-mono font-bold text-lg">{signal.entry_price ?? '-'}</span>
                               </div>
                               <div className="bg-dark-900/50 p-4 rounded-xl border border-dark-800">
                                 <span className="text-gray-500 text-xs uppercase font-semibold tracking-wider block mb-1 flex items-center gap-1">
                                   <Target className="w-3 h-3 text-green-500" /> Take Profit
                                 </span>
-                                <span className="text-green-400 font-mono font-bold text-lg">{signal.take_profit || '-'}</span>
+                                <span className="text-green-400 font-mono font-bold text-lg">{signal.take_profit_1 || '-'}</span>
                               </div>
                               <div className="bg-dark-900/50 p-4 rounded-xl border border-dark-800">
                                 <span className="text-gray-500 text-xs uppercase font-semibold tracking-wider block mb-1 flex items-center gap-1">
@@ -562,9 +562,9 @@ function DashboardContent() {
                             </div>
                           </div>
 
-                          {signal.description && (
+                          {signal.notes && (
                             <div className="mt-4 pt-4 border-t border-dark-800/50">
-                              <p className="text-sm text-gray-400">{signal.description}</p>
+                              <p className="text-sm text-gray-400">{signal.notes}</p>
                             </div>
                           )}
                         </Card>

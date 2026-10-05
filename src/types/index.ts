@@ -70,17 +70,18 @@ export interface SignalPlan extends Product {
 
 export interface TradingSignal {
   id: string;
-  plan_id: string;
-  symbol: string;
-  direction: 'buy' | 'sell';
-  entry_price: number;
-  stop_loss?: number;
-  take_profit?: number;
-  description?: string;
-  status: 'active' | 'closed' | 'expired';
+  title: string;
+  pair: string;
+  direction: string;
+  entry_price?: number | null;
+  stop_loss?: number | null;
+  take_profit_1?: number | null;
+  take_profit_2?: number | null;
+  take_profit_3?: number | null;
+  status?: string | null;
+  notes?: string | null;
   created_at: string;
-  closed_at?: string;
-  result?: 'win' | 'loss' | 'breakeven';
+  updated_at?: string;
 }
 
 // Bot Types

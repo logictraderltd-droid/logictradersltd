@@ -7,11 +7,10 @@ import { createBrowserClient } from "@/lib/supabase";
 
 interface SignalsTabProps {
     signals: TradingSignal[];
-    products: Product[]; // Used to select which plan the signal is for (if needed)
     onRefresh: () => void;
 }
 
-export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
+export function SignalsTab({ signals, onRefresh }: SignalsTabProps) {
     const [isCreating, setIsCreating] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [editingSignal, setEditingSignal] = useState<TradingSignal | null>(null);
@@ -19,25 +18,29 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
     const [signalToDelete, setSignalToDelete] = useState<TradingSignal | null>(null);
 
     const [formData, setFormData] = useState({
-        symbol: '',
+        title: '',
+        pair: '',
         direction: 'buy',
         entry_price: '',
         stop_loss: '',
-        take_profit: '',
-        plan_id: '',
-        description: '',
+        take_profit_1: '',
+        take_profit_2: '',
+        take_profit_3: '',
+        notes: '',
         status: 'active'
     });
 
     const handleOpenCreate = () => {
         setFormData({
-            symbol: '',
+            title: '',
+            pair: '',
             direction: 'buy',
             entry_price: '',
             stop_loss: '',
-            take_profit: '',
-            plan_id: '',
-            description: '',
+            take_profit_1: '',
+            take_profit_2: '',
+            take_profit_3: '',
+            notes: '',
             status: 'active'
         });
         setEditingSignal(null);
@@ -46,14 +49,16 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
 
     const handleOpenEdit = (signal: TradingSignal) => {
         setFormData({
-            symbol: signal.symbol,
+            title: signal.title,
+            pair: signal.pair,
             direction: signal.direction,
-            entry_price: signal.entry_price.toString(),
+            entry_price: signal.entry_price?.toString() || '',
             stop_loss: signal.stop_loss?.toString() || '',
-            take_profit: signal.take_profit?.toString() || '',
-            plan_id: signal.plan_id,
-            description: signal.description || '',
-            status: signal.status
+            take_profit_1: signal.take_profit_1?.toString() || '',
+            take_profit_2: signal.take_profit_2?.toString() || '',
+            take_profit_3: signal.take_profit_3?.toString() || '',
+            notes: signal.notes || '',
+            status: signal.status || 'active'
         });
         setEditingSignal(signal);
         setIsCreating(true);
@@ -62,14 +67,14 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
     const handleCreateOrUpdateSignal = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!formData.plan_id) {
-            alert("Please select a signal plan");
+        if (!formData.title.trim() || !formData.pair.trim()) {
+            alert("Please enter a signal title and pair");
             return;
         }
 
-        const entryPrice = parseFloat(formData.entry_price);
-        if (isNaN(entryPrice)) {
-            alert("Please enter a valid entry price");
+        const numericFields = [formData.entry_price, formData.stop_loss, formData.take_profit_1, formData.take_profit_2, formData.take_profit_3];
+        if (numericFields.some((value) => value.trim() && !Number.isFinite(Number(value)))) {
+            alert("Please enter valid prices");
             return;
         }
 
@@ -77,13 +82,15 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
         const supabase = createBrowserClient();
         try {
             const payload = {
-                symbol: formData.symbol.toUpperCase(),
+                title: formData.title.trim(),
+                pair: formData.pair.trim().toUpperCase(),
                 direction: formData.direction,
-                entry_price: entryPrice,
-                stop_loss: formData.stop_loss ? parseFloat(formData.stop_loss) : null,
-                take_profit: formData.take_profit ? parseFloat(formData.take_profit) : null,
-                plan_id: formData.plan_id,
-                description: formData.description,
+                entry_price: formData.entry_price ? Number(formData.entry_price) : null,
+                stop_loss: formData.stop_loss ? Number(formData.stop_loss) : null,
+                take_profit_1: formData.take_profit_1 ? Number(formData.take_profit_1) : null,
+                take_profit_2: formData.take_profit_2 ? Number(formData.take_profit_2) : null,
+                take_profit_3: formData.take_profit_3 ? Number(formData.take_profit_3) : null,
+                notes: formData.notes.trim() || null,
                 status: formData.status
             };
 
@@ -136,8 +143,6 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
         }
     };
 
-    const signalPlans = products.filter(p => p.type === 'signal');
-
     return (
         <div className="space-y-6">
             {!isCreating ? (
@@ -161,7 +166,8 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
                             <div key={signal.id} className="group bg-dark-900 border border-dark-800 rounded-2xl p-5 hover:border-gold-500/50 transition-all flex flex-col">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex flex-col">
-                                        <span className="text-2xl font-black text-white tracking-wider">{signal.symbol}</span>
+                                        <span className="text-sm font-semibold text-gray-400">{signal.title}</span>
+                                        <span className="text-2xl font-black text-white tracking-wider">{signal.pair}</span>
                                         <span className="text-xs text-gray-500">
                                             {new Date(signal.created_at).toLocaleDateString()} {new Date(signal.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
@@ -182,7 +188,7 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
                                 <div className="grid grid-cols-3 gap-3 mb-4 bg-dark-950/50 p-3 rounded-xl border border-dark-800">
                                     <div className="flex flex-col">
                                         <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Entry</span>
-                                        <span className="text-sm font-mono text-white font-bold">{signal.entry_price}</span>
+                                        <span className="text-sm font-mono text-white font-bold">{signal.entry_price ?? 'N/A'}</span>
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="text-[10px] text-red-500/70 uppercase font-bold mb-1">Stop Loss</span>
@@ -190,20 +196,18 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="text-[10px] text-green-500/70 uppercase font-bold mb-1">Take Profit</span>
-                                        <span className="text-sm font-mono text-green-400 font-bold">{signal.take_profit || 'N/A'}</span>
+                                        <span className="text-sm font-mono text-green-400 font-bold">{signal.take_profit_1 || 'N/A'}</span>
                                     </div>
                                 </div>
 
-                                {signal.description && (
+                                {signal.notes && (
                                     <p className="text-sm text-gray-400 mb-4 line-clamp-2 italic h-10">
-                                        "{signal.description}"
+                                        "{signal.notes}"
                                     </p>
                                 )}
 
                                 <div className="mt-auto pt-4 border-t border-dark-800 flex justify-between items-center">
-                                    <span className="text-[10px] text-gray-500 truncate max-w-[120px]">
-                                        Plan: {(signal as any).plan?.name || 'Loading...'}
-                                    </span>
+                                    <span className="text-[10px] text-gray-500 truncate max-w-[120px]">{signal.status || 'active'}</span>
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => handleOpenEdit(signal)}
@@ -247,14 +251,25 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
 
                     <form onSubmit={handleCreateOrUpdateSignal} className="dark-card p-6 md:p-8 space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-sm font-medium text-gray-400">Signal Title <span className="text-gold-500">*</span></label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. London session breakout"
+                                    className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors"
+                                    value={formData.title}
+                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                    required
+                                />
+                            </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-400">Pair / Symbol <span className="text-gold-500">*</span></label>
                                 <input
                                     type="text"
                                     placeholder="e.g. BTCUSD"
                                     className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors uppercase font-bold"
-                                    value={formData.symbol}
-                                    onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
+                                    value={formData.pair}
+                                    onChange={(e) => setFormData({ ...formData, pair: e.target.value.toUpperCase() })}
                                     required
                                 />
                             </div>
@@ -281,7 +296,7 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
 
                         <div className="p-4 bg-dark-950/50 rounded-xl border border-dark-800 space-y-4">
                             <div className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Price Levels</div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-400">Entry Price <span className="text-gold-500">*</span></label>
                                     <input
@@ -291,7 +306,6 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
                                         className="w-full bg-dark-900 border border-dark-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-gold-500/50 transition-colors font-mono"
                                         value={formData.entry_price}
                                         onChange={(e) => setFormData({ ...formData, entry_price: e.target.value })}
-                                        required
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -306,34 +320,28 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-green-400">Take Profit</label>
+                                    <label className="text-sm font-medium text-green-400">Take Profit 1</label>
                                     <input
                                         type="number"
                                         step="any"
                                         placeholder="0.00"
                                         className="w-full bg-dark-900 border border-green-500/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-green-500 transition-colors font-mono"
-                                        value={formData.take_profit}
-                                        onChange={(e) => setFormData({ ...formData, take_profit: e.target.value })}
+                                        value={formData.take_profit_1}
+                                        onChange={(e) => setFormData({ ...formData, take_profit_1: e.target.value })}
                                     />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-green-400">Take Profit 2</label>
+                                    <input type="number" step="any" placeholder="0.00" className="w-full bg-dark-900 border border-green-500/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-green-500 transition-colors font-mono" value={formData.take_profit_2} onChange={(e) => setFormData({ ...formData, take_profit_2: e.target.value })} />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-green-400">Take Profit 3</label>
+                                    <input type="number" step="any" placeholder="0.00" className="w-full bg-dark-900 border border-green-500/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-green-500 transition-colors font-mono" value={formData.take_profit_3} onChange={(e) => setFormData({ ...formData, take_profit_3: e.target.value })} />
                                 </div>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-400">Target Plan <span className="text-gold-500">*</span></label>
-                                <select
-                                    className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors"
-                                    value={formData.plan_id}
-                                    onChange={(e) => setFormData({ ...formData, plan_id: e.target.value })}
-                                    required
-                                >
-                                    <option value="">Select a Plan...</option>
-                                    {signalPlans.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                    ))}
-                                </select>
-                            </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-400">Status</label>
                                 <select
@@ -349,13 +357,13 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-400">Analysis / Description</label>
+                                <label className="text-sm font-medium text-gray-400">Notes</label>
                             <textarea
                                 rows={3}
                                 placeholder="Add technical analysis, reasoning..."
                                 className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors resize-none"
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                value={formData.notes}
+                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                             />
                         </div>
 
@@ -390,7 +398,7 @@ export function SignalsTab({ signals, products, onRefresh }: SignalsTabProps) {
                         <div>
                             <h3 className="text-xl font-bold text-white">Delete Signal?</h3>
                             <p className="text-gray-400 mt-2 text-sm">
-                                Are you sure you want to delete the signal for <span className="text-white font-bold">{signalToDelete.symbol}</span>?
+                                Are you sure you want to delete the signal for <span className="text-white font-bold">{signalToDelete.pair}</span>?
                             </p>
                         </div>
                         <div className="flex gap-3 pt-4">

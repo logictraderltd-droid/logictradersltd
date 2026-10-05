@@ -55,6 +55,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
     const [videoUrl, setVideoUrl] = useState("");
     const [downloadUrl, setDownloadUrl] = useState("");
     const [visitUrl, setVisitUrl] = useState("");
+    const [botInstructions, setBotInstructions] = useState("");
 
     // Metadata Fields
     const [level, setLevel] = useState("beginner");
@@ -83,7 +84,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
         sort_order: 0,
     });
 
-    const handleOpenModal = (product?: Product) => {
+    const handleOpenModal = async (product?: Product) => {
         setNotification(null);
         if (product) {
             setEditingProduct(product);
@@ -101,6 +102,24 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             setVideoUrl(product.metadata?.video_url || "");
             setVisitUrl(product.metadata?.visit_url || "");
             setDownloadUrl((product as any).download_url || product.metadata?.download_url || "");
+            setBotInstructions(product.metadata?.instructions || "");
+
+            if (productType === 'bot') {
+                const supabase = createBrowserClient();
+                const { data: botLink, error } = await supabase
+                    .from('bot_links')
+                    .select('link_url, download_url, instructions')
+                    .eq('product_id', product.id)
+                    .limit(1)
+                    .maybeSingle();
+                if (error) {
+                    setNotification({ type: 'error', message: error.message });
+                } else if (botLink) {
+                    setVisitUrl(botLink.link_url || "");
+                    setDownloadUrl(botLink.download_url || "");
+                    setBotInstructions(botLink.instructions || "");
+                }
+            }
 
             // Set metadata fields
             setLevel(product.metadata?.level || "beginner");
@@ -125,6 +144,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             setVideoUrl("");
             setDownloadUrl("");
             setVisitUrl("");
+            setBotInstructions("");
             setLevel("beginner");
             setDuration("");
             setInstructor("");
@@ -159,6 +179,9 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             }
 
             const productType = getProductType(formData);
+            if (productType === 'bot' && !visitUrl.trim()) {
+                throw new Error("Add the bot's link URL before saving.");
+            }
 
             // Prepare payload using the live Supabase schema.
             const payload: any = {
@@ -189,6 +212,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 payload.metadata.visit_url = visitUrl;
                 payload.metadata.download_url = downloadUrl;
                 payload.metadata.features = listItems;
+                payload.metadata.instructions = botInstructions;
             } else if (formData.type === 'signal') {
                 payload.metadata.features = listItems;
             }
@@ -208,7 +232,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
 
             console.log("Payload:", payload);
 
-            let error;
+            let savedProductId = editingProduct?.id || null;
 
             if (editingProduct) {
                 console.log("Updating product:", editingProduct.id);
@@ -218,20 +242,38 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                     .from("products")
                     .update(payload)
                     .eq("id", editingProduct.id);
-                error = updateError;
-                if (!error) setNotification({ type: 'success', message: 'Product updated successfully' });
+                if (updateError) throw updateError;
             } else {
                 console.log("Creating new product");
-                const { error: insertError } = await supabase
+                const { data: insertedProduct, error: insertError } = await supabase
                     .from("products")
-                    .insert([payload]);
-                error = insertError;
-                if (!error) setNotification({ type: 'success', message: 'Product created successfully' });
+                    .insert([payload])
+                    .select('id')
+                    .single();
+                if (insertError) throw insertError;
+                savedProductId = insertedProduct.id;
+                setEditingProduct({ ...payload, id: insertedProduct.id } as Product);
             }
 
-            if (error) {
-                console.error("Supabase Error details:", error);
-                throw error;
+            if (productType === 'bot' && savedProductId) {
+                const botLinkPayload = {
+                    product_id: savedProductId,
+                    link_url: visitUrl.trim(),
+                    download_url: downloadUrl.trim() || null,
+                    instructions: botInstructions.trim() || null,
+                };
+                const { data: existingBotLink, error: lookupError } = await supabase
+                    .from('bot_links')
+                    .select('id')
+                    .eq('product_id', savedProductId)
+                    .limit(1)
+                    .maybeSingle();
+                if (lookupError) throw lookupError;
+
+                const { error: botLinkError } = existingBotLink
+                    ? await supabase.from('bot_links').update(botLinkPayload).eq('id', existingBotLink.id)
+                    : await supabase.from('bot_links').insert(botLinkPayload);
+                if (botLinkError) throw botLinkError;
             }
 
             console.log("Submission successful");
@@ -842,14 +884,25 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                                 <div className="space-y-2">
                                                     <label className="text-sm font-medium text-gray-400 flex items-center gap-2">
                                                         <LinkIcon className="w-4 h-4 text-gold-500" />
-                                                        Visit / Demo Link
+                                                        Bot Link URL <span className="text-red-500">*</span>
                                                     </label>
                                                     <input
                                                         type="url"
+                                                        required
                                                         value={visitUrl}
                                                         onChange={(e) => setVisitUrl(e.target.value)}
                                                         className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors"
                                                         placeholder="https://example.com/demo"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2 md:col-span-2">
+                                                    <label className="text-sm font-medium text-gray-400">Bot Instructions (optional)</label>
+                                                    <textarea
+                                                        rows={3}
+                                                        value={botInstructions}
+                                                        onChange={(e) => setBotInstructions(e.target.value)}
+                                                        className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors resize-none"
+                                                        placeholder="Installation or setup instructions"
                                                     />
                                                 </div>
                                             </div>

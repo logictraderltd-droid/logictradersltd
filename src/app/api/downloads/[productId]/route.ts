@@ -63,14 +63,15 @@ export async function GET(
 
     // Get bot details
     const { data: bot, error: botError } = await supabase
-      .from('trading_bots')
-      .select('*')
+      .from('bot_links')
+      .select('link_url, download_url, instructions')
       .eq('product_id', productId)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
-    if (botError || !bot) {
+    if (botError || !bot || (!bot.download_url && !bot.link_url)) {
       return NextResponse.json(
-        { error: 'Bot details not found' },
+        { error: 'Bot download is not configured' },
         { status: 404 }
       );
     }
@@ -100,10 +101,8 @@ export async function GET(
       success: true,
       token: token.token,
       productName: product.name,
-      downloadUrl: bot.download_url,
-      version: bot.version,
-      setupInstructions: bot.setup_instructions,
-      requirements: bot.requirements,
+      downloadUrl: bot.download_url || bot.link_url,
+      setupInstructions: bot.instructions,
       expiresIn: 24 * 60 * 60, // 24 hours in seconds
       maxDownloads: 3,
     });
@@ -168,12 +167,13 @@ export async function POST(
 
     // Get bot download URL
     const { data: bot } = await supabase
-      .from('trading_bots')
-      .select('download_url, version')
+      .from('bot_links')
+      .select('download_url, link_url')
       .eq('product_id', params.productId)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
-    if (!bot || !bot.download_url) {
+    if (!bot || (!bot.download_url && !bot.link_url)) {
       return NextResponse.json(
         { error: 'Download not available' },
         { status: 404 }
@@ -203,8 +203,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      downloadUrl: bot.download_url,
-      version: bot.version,
+      downloadUrl: bot.download_url || bot.link_url,
       remainingDownloads: tokenData.max_downloads - tokenData.download_count - 1,
     });
 
