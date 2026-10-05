@@ -19,7 +19,7 @@ const formatProductPrice = (price: number, currency?: string) => {
 };
 
 const getProductType = (product: Product | Partial<Product> | null | undefined) =>
-    (product?.product_type ?? product?.type ?? 'course') as Product['type'];
+    (product?.type ?? product?.product_type ?? 'course') as Product['type'];
 
 interface ProductsTabProps {
     products: Product[];
@@ -732,7 +732,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                         <button
                                             key={type.id}
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, type: type.id as any })}
+                                            onClick={() => setFormData({ ...formData, type: type.id as any, product_type: type.id as Product['type'] })}
                                             className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all ${formData.type === type.id
                                                 ? 'border-gold-500 bg-gold-500/10 text-gold-400'
                                                 : 'border-dark-800 bg-dark-950 text-gray-500 hover:border-gold-500/50 hover:text-gray-300'

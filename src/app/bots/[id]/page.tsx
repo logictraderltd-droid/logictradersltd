@@ -188,7 +188,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
             {/* Bot Info */}
             <div>
               <div className="inline-flex items-center px-3 py-1 rounded-full bg-gold-500/20 text-gold-400 text-sm mb-4">
-                Version {bot.version}
+                Trading Bot
               </div>
 
               <h1 className="text-4xl font-bold mb-4 gold-gradient-text">
@@ -314,7 +314,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
               </motion.div>
 
               {/* System Requirements */}
-              {bot.requirements && bot.requirements.length > 0 && (
+              {Array.isArray(product.metadata?.requirements) && product.metadata.requirements.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -323,7 +323,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                 >
                   <h2 className="text-2xl font-bold mb-6">System Requirements</h2>
                   <ul className="space-y-3">
-                    {bot.requirements.map((req, index) => (
+                    {product.metadata.requirements.map((req: string, index: number) => (
                       <li key={index} className="flex items-start">
                         <Check className="w-5 h-5 text-gold-400 mr-3 flex-shrink-0 mt-1" />
                         <span className="text-gray-300">{req}</span>
@@ -334,7 +334,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
               )}
 
               {/* Setup Instructions */}
-              {bot.setup_instructions && (
+              {bot?.instructions && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -344,26 +344,21 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                   <h2 className="text-2xl font-bold mb-6">Setup Instructions</h2>
                   <div className="prose prose-invert max-w-none">
                     <p className="text-gray-300 whitespace-pre-line">
-                      {bot.setup_instructions}
+                      {bot.instructions}
                     </p>
                   </div>
                 </motion.div>
               )}
 
-              {/* Changelog */}
-              {bot.changelog && (
+              {bot?.link_url && hasAccess && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
                   className="dark-card p-8"
                 >
-                  <h2 className="text-2xl font-bold mb-6">
-                    Version {bot.version} - What's New
-                  </h2>
-                  <div className="prose prose-invert max-w-none">
-                    <p className="text-gray-300 whitespace-pre-line">{bot.changelog}</p>
-                  </div>
+                  <h2 className="text-2xl font-bold mb-6">Bot Link</h2>
+                  <a href={bot.link_url} target="_blank" rel="noreferrer" className="text-gold-400 hover:text-gold-300 break-all">{bot.link_url}</a>
                 </motion.div>
               )}
             </div>
@@ -374,16 +369,6 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                 <div>
                   <h3 className="text-xl font-bold mb-4">Bot Details</h3>
                   <div className="space-y-4">
-                    <div>
-                      <p className="text-sm text-gray-500 mb-1">Version</p>
-                      <p className="font-medium">{bot.version}</p>
-                    </div>
-                    {bot.file_size && (
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">File Size</p>
-                        <p className="font-medium">{bot.file_size}</p>
-                      </div>
-                    )}
                     <div>
                       <p className="text-sm text-gray-500 mb-1">Platform</p>
                       <p className="font-medium">MT4/MT5</p>
