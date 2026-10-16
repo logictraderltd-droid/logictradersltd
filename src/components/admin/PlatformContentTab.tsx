@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { CldUploadWidget } from "next-cloudinary";
 import { createBrowserClient } from "@/lib/supabase";
@@ -31,44 +31,58 @@ function readStoredDraft(sectionKey: string): PlatformListing | null {
   try {
     const stored = window.localStorage.getItem(getDraftStorageKey(sectionKey));
     if (!stored) return null;
-    const value: unknown = JSON.parse(stored);
-    if (
-      !value ||
-      typeof value !== "object" ||
-      Array.isArray(value) ||
-      !("id" in value) ||
-      typeof value.id !== "string" ||
-      !("title" in value) ||
-      typeof value.title !== "string" ||
-      !("image_url" in value) ||
-      typeof value.image_url !== "string" ||
-      !("video_url" in value) ||
-      typeof value.video_url !== "string" ||
-      !("description" in value) ||
-      typeof value.description !== "string" ||
-      !("affiliate_url" in value) ||
-      typeof value.affiliate_url !== "string" ||
-      !("published" in value) ||
-      typeof value.published !== "boolean" ||
-      !("sort_order" in value) ||
-      typeof value.sort_order !== "number"
-    ) {
-      return null;
-    }
-    return {
-      id: value.id,
-      title: value.title,
-      image_url: value.image_url,
-      video_url: value.video_url,
-      description: value.description,
-      affiliate_url: value.affiliate_url,
-      published: value.published,
-      sort_order: value.sort_order,
-    };
+    return parseListingDraft(JSON.parse(stored));
   } catch (error) {
     console.error("Unable to restore saved listing draft:", error);
     return null;
   }
+}
+
+function parseListingDraft(value: unknown): PlatformListing | null {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    !("id" in value) ||
+    typeof value.id !== "string" ||
+    !("title" in value) ||
+    typeof value.title !== "string" ||
+    !("image_url" in value) ||
+    typeof value.image_url !== "string" ||
+    !("video_url" in value) ||
+    typeof value.video_url !== "string" ||
+    !("description" in value) ||
+    typeof value.description !== "string" ||
+    !("affiliate_url" in value) ||
+    typeof value.affiliate_url !== "string" ||
+    !("published" in value) ||
+    typeof value.published !== "boolean" ||
+    !("sort_order" in value) ||
+    typeof value.sort_order !== "number"
+  ) {
+    return null;
+  }
+  return {
+    id: value.id,
+    title: value.title,
+    image_url: value.image_url,
+    video_url: value.video_url,
+    description: value.description,
+    affiliate_url: value.affiliate_url,
+    published: value.published,
+    sort_order: value.sort_order,
+  };
+}
+
+function listingsMatch(left: PlatformListing, right: PlatformListing) {
+  return left.id === right.id &&
+    left.title === right.title &&
+    left.image_url === right.image_url &&
+    left.video_url === right.video_url &&
+    left.description === right.description &&
+    left.affiliate_url === right.affiliate_url &&
+    left.published === right.published &&
+    left.sort_order === right.sort_order;
 }
 
 function validOptionalUrl(value: string) {
@@ -116,6 +130,9 @@ export function PlatformContentTab() {
   const [hasRestoredSection, setHasRestoredSection] = useState(false);
   const [items, setItems] = useState<PlatformListing[]>([]);
   const [draft, setDraft] = useState<PlatformListing | null>(null);
+  const [draftOwnerId, setDraftOwnerId] = useState<string | null>(null);
+  const [draftSyncReady, setDraftSyncReady] = useState(false);
+  const [draftSaveStatus, setDraftSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [communityUrl, setCommunityUrl] = useState("");
   const [vipUrl, setVipUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -123,6 +140,8 @@ export function PlatformContentTab() {
   const [hasLoadError, setHasLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [notice, setNotice] = useState("");
+  const draftSaveTimerRef = useRef<number | null>(null);
+  const draftSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const section = contentSections.find((entry) => entry.key === sectionKey) ?? contentSections[0];
 
@@ -153,19 +172,55 @@ export function PlatformContentTab() {
     const load = async () => {
       setIsLoading(true);
       setHasLoadError(false);
+      setDraftSyncReady(false);
+      setDraftOwnerId(null);
       setNotice("");
       setDraft(readStoredDraft(sectionKey));
       try {
         const supabase = createBrowserClient();
-        const { data, error } = await supabase
-          .from("platform_listings")
-          .select("*")
-          .eq("section_key", sectionKey)
-          .order("sort_order", { ascending: true })
-          .order("created_at", { ascending: false });
-        if (error) throw error;
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        if (!authData.user) throw new Error("Your admin session could not be verified. Sign in again before editing listings.");
+        const [listingsResult, draftsResult] = await Promise.all([
+          supabase
+            .from("platform_listings")
+            .select("*")
+            .eq("section_key", sectionKey)
+            .order("sort_order", { ascending: true })
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("platform_listing_drafts")
+            .select("listing_id, value")
+            .eq("user_id", authData.user.id)
+            .eq("section_key", sectionKey)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
+        if (listingsResult.error) throw listingsResult.error;
+        if (draftsResult.error) throw draftsResult.error;
         if (!cancelled) {
-          setItems(Array.isArray(data) ? data as PlatformListing[] : []);
+          const loadedItems = Array.isArray(listingsResult.data) ? listingsResult.data as PlatformListing[] : [];
+          const cloudDraft = draftsResult.data
+            ? parseListingDraft({ ...draftsResult.data.value, id: draftsResult.data.listing_id })
+            : null;
+          const matchingSavedItem = cloudDraft && loadedItems.find((item) => listingsMatch(item, cloudDraft));
+          setItems(loadedItems);
+          setDraft(matchingSavedItem ? null : cloudDraft ?? readStoredDraft(sectionKey));
+          setDraftSaveStatus(matchingSavedItem || cloudDraft ? "saved" : "idle");
+          setDraftOwnerId(authData.user.id);
+          setDraftSyncReady(true);
+          if (matchingSavedItem) {
+            void supabase
+              .from("platform_listing_drafts")
+              .delete()
+              .eq("user_id", authData.user.id)
+              .eq("section_key", sectionKey)
+              .eq("listing_id", matchingSavedItem.id)
+              .then(({ error }) => {
+                if (error) console.error("Unable to clean up a previously saved platform draft:", error);
+              });
+          }
         }
       } catch (error) {
         console.error("Unable to load platform content:", error);
@@ -173,8 +228,10 @@ export function PlatformContentTab() {
           setHasLoadError(true);
           const details = describeDatabaseError(error);
           setNotice(
-            details.toLowerCase().includes("platform_listings")
-              ? `The platform listings table is not available. Run the platform listings migration in Supabase, then retry. ${details}`
+            details.toLowerCase().includes("platform_listing_drafts")
+              ? `Cloud draft storage is not available. Run the platform listing drafts migration in Supabase, then retry. ${details}`
+              : details.toLowerCase().includes("platform_listings")
+                ? `The platform listings table is not available. Run the platform listings migration in Supabase, then retry. ${details}`
               : `Could not load this section. Check its Supabase permissions, then retry. ${details}`,
           );
         }
@@ -185,6 +242,72 @@ export function PlatformContentTab() {
     void load();
     return () => { cancelled = true; };
   }, [sectionKey, loadAttempt, hasRestoredSection]);
+
+  const saveDraftToCloud = (listing: PlatformListing, key: string, ownerId: string) => {
+    const save = async () => {
+      const { error } = await createBrowserClient()
+        .from("platform_listing_drafts")
+        .upsert({
+          user_id: ownerId,
+          section_key: key,
+          listing_id: listing.id,
+          value: {
+            title: listing.title,
+            image_url: listing.image_url,
+            video_url: listing.video_url,
+            description: listing.description,
+            affiliate_url: listing.affiliate_url,
+            published: listing.published,
+            sort_order: listing.sort_order,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id,section_key,listing_id" });
+      if (error) throw error;
+    };
+    const queuedSave = draftSaveQueueRef.current.catch(() => undefined).then(save);
+    draftSaveQueueRef.current = queuedSave;
+    return withRequestTimeout(() => queuedSave, 10_000);
+  };
+
+  useEffect(() => {
+    if (!draftSyncReady || !draftOwnerId || !draft) return;
+    let cancelled = false;
+    setDraftSaveStatus("saving");
+    const timerId = window.setTimeout(() => {
+      draftSaveTimerRef.current = null;
+      void saveDraftToCloud(draft, sectionKey, draftOwnerId).then(() => {
+        if (!cancelled) setDraftSaveStatus("saved");
+      }).catch((error) => {
+        console.error("Unable to sync platform listing draft:", error);
+        if (!cancelled) {
+          setDraftSaveStatus("error");
+          setNotice(`Draft is only saved in this browser and could not sync to your account: ${describeDatabaseError(error)}`);
+        }
+      });
+    }, 400);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "hidden") return;
+      window.clearTimeout(timerId);
+      if (draftSaveTimerRef.current === timerId) draftSaveTimerRef.current = null;
+      void saveDraftToCloud(draft, sectionKey, draftOwnerId).then(() => {
+        if (!cancelled) setDraftSaveStatus("saved");
+      }).catch((error) => {
+        console.error("Unable to save platform draft when leaving the page:", error);
+        if (!cancelled) {
+          setDraftSaveStatus("error");
+          setNotice(`Draft could not sync before leaving this page: ${describeDatabaseError(error)}`);
+        }
+      });
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    draftSaveTimerRef.current = timerId;
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (draftSaveTimerRef.current === timerId) draftSaveTimerRef.current = null;
+    };
+  }, [draft, draftOwnerId, draftSyncReady, sectionKey]);
 
   const saveDraftLocally = (key: string, value: PlatformListing | null) => {
     try {
@@ -254,6 +377,15 @@ export function PlatformContentTab() {
     setNotice("");
     const savedListing = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
     try {
+      if (!draftOwnerId || !draftSyncReady) {
+        throw new Error("Your admin session is not ready to save drafts. Reload the section and retry.");
+      }
+      if (draftSaveTimerRef.current !== null) {
+        window.clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = null;
+      }
+      await saveDraftToCloud(savedListing, sectionKey, draftOwnerId);
+      setDraftSaveStatus("saved");
       const supabase = createBrowserClient();
       const editing = items.some((item) => item.id === savedListing.id);
       const payload = {
@@ -286,13 +418,25 @@ export function PlatformContentTab() {
       const { data, error } = result;
       if (error) throw error;
       if (!data) throw new Error("The database did not return the saved listing.");
+      const { error: draftDeleteError } = await supabase
+        .from("platform_listing_drafts")
+        .delete()
+        .eq("user_id", draftOwnerId)
+        .eq("section_key", sectionKey)
+        .eq("listing_id", savedListing.id);
+      if (draftDeleteError) {
+        console.error("Listing saved, but cloud draft cleanup failed:", draftDeleteError);
+      }
       setItems((current) => editing
         ? current.map((item) => item.id === savedListing.id ? data as PlatformListing : item)
         : [data as PlatformListing, ...current]);
       notifyPlatformContentChanged(sectionKey);
       saveDraftLocally(sectionKey, null);
       setDraft(null);
-      setNotice(`"${savedListing.title}" saved successfully.`);
+      setDraftSaveStatus("idle");
+      setNotice(draftDeleteError
+        ? `"${savedListing.title}" saved. Its old cloud draft could not be removed, but it will not replace the saved listing.`
+        : `"${savedListing.title}" saved successfully.`);
     } catch (error) {
       console.error("Unable to save platform content:", error);
       setNotice(`Could not save "${savedListing.title}". Your draft is preserved. ${describeDatabaseError(error)}`);
@@ -331,6 +475,32 @@ export function PlatformContentTab() {
       setNotice(`Could not delete "${item.title}". ${describeDatabaseError(error)}`);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const cancelDraft = async () => {
+    if (!draft || isSaving) return;
+    if (draftSaveTimerRef.current !== null) {
+      window.clearTimeout(draftSaveTimerRef.current);
+      draftSaveTimerRef.current = null;
+    }
+    const cancelledDraft = draft;
+    setDraft(null);
+    saveDraftLocally(sectionKey, null);
+    setDraftSaveStatus("idle");
+    if (!draftOwnerId) return;
+    try {
+      await saveDraftToCloud(cancelledDraft, sectionKey, draftOwnerId);
+      const { error } = await createBrowserClient()
+        .from("platform_listing_drafts")
+        .delete()
+        .eq("user_id", draftOwnerId)
+        .eq("section_key", sectionKey)
+        .eq("listing_id", cancelledDraft.id);
+      if (error) throw error;
+    } catch (error) {
+      console.error("Unable to remove cancelled platform listing draft:", error);
+      setNotice(`Draft was cleared here but could not be removed from your account: ${describeDatabaseError(error)}`);
     }
   };
 
@@ -377,6 +547,16 @@ export function PlatformContentTab() {
         {contentSections.map((entry) => (
           <button key={entry.key} type="button" disabled={isSaving} onClick={() => {
             saveDraftLocally(sectionKey, draft);
+            if (draft && draftOwnerId) {
+              if (draftSaveTimerRef.current !== null) {
+                window.clearTimeout(draftSaveTimerRef.current);
+                draftSaveTimerRef.current = null;
+              }
+              void saveDraftToCloud(draft, sectionKey, draftOwnerId).catch((error) => {
+                console.error("Unable to save draft before switching platform sections:", error);
+                setNotice(`Draft could not sync before switching sections: ${describeDatabaseError(error)}`);
+              });
+            }
             try {
               window.localStorage.setItem(ACTIVE_SECTION_STORAGE_KEY, entry.key);
             } catch (error) {
@@ -405,12 +585,18 @@ export function PlatformContentTab() {
 
       {draft && (
         <form onSubmit={saveListing} className="dark-card space-y-5 p-5">
+          <fieldset disabled={isSaving} className="space-y-5 disabled:opacity-80">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="text-xl font-semibold text-white">{items.some((item) => item.id === draft.id) ? "Edit listing" : "Add listing"}</h3>
-              <p className="text-sm text-gray-400">Your unfinished changes are saved in this browser automatically.</p>
+              <p className="text-sm text-gray-400">
+                {draftSaveStatus === "saving" && "Saving draft to your account…"}
+                {draftSaveStatus === "saved" && "Draft saved to your account; you can continue in another browser."}
+                {draftSaveStatus === "error" && "Draft sync failed; it is only saved in this browser."}
+                {draftSaveStatus === "idle" && "Your unfinished changes will sync to your account automatically."}
+              </p>
             </div>
-            <button type="button" disabled={isSaving} onClick={() => { saveDraftLocally(sectionKey, null); setDraft(null); }} className="rounded-lg p-2 text-gray-400 hover:bg-dark-800 hover:text-white" aria-label="Close listing editor"><X className="h-5 w-5" /></button>
+            <button type="button" disabled={isSaving} onClick={() => void cancelDraft()} className="rounded-lg p-2 text-gray-400 hover:bg-dark-800 hover:text-white" aria-label="Close listing editor"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-1 text-sm text-gray-400">Name / title<input value={draft.title} maxLength={160} onChange={(event) => updateDraft({ title: event.target.value })} className="dark-input w-full" required /></label>
@@ -443,9 +629,10 @@ export function PlatformContentTab() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button type="submit" disabled={isSaving || isLoading} className="gold-button inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4" />{isSaving ? "Saving..." : "Save listing"}</button>
-            <button type="button" disabled={isSaving} onClick={() => { saveDraftLocally(sectionKey, null); setDraft(null); }} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-4 py-2 text-sm text-gray-300 hover:bg-dark-800 disabled:opacity-50"><X className="h-4 w-4" /> Cancel</button>
+            <button type="button" disabled={isSaving} onClick={() => void cancelDraft()} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-4 py-2 text-sm text-gray-300 hover:bg-dark-800 disabled:opacity-50"><X className="h-4 w-4" /> Cancel</button>
             {notice && <p role="status" className="text-sm text-gray-300">{notice}</p>}
           </div>
+          </fieldset>
         </form>
       )}
 
