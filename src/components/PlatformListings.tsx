@@ -54,20 +54,28 @@ export default function PlatformListings({
     const loadListings = async () => {
       try {
         const { data, error } = await createBrowserClient()
-          .from("site_content")
-          .select("value")
-          .eq("key", contentKey)
-          .maybeSingle();
+          .from("platform_listings")
+          .select("id, title, image_url, video_url, description, affiliate_url, published, sort_order, created_at")
+          .eq("section_key", contentKey)
+          .eq("published", true)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false });
         if (error) throw error;
         if (cancelled) return;
-        const records = Array.isArray(data?.value?.items) ? data.value.items : [];
-        setItems(records
-          .filter((item: PlatformListing) => item.published)
-          .sort((a: PlatformListing, b: PlatformListing) => a.sort_order - b.sort_order));
+        setItems(Array.isArray(data) ? data as PlatformListing[] : []);
         setLoadError("");
       } catch (error) {
         console.error(`Unable to load ${contentKey}:`, error);
-        if (!cancelled) setLoadError("This section is temporarily unavailable.");
+        if (!cancelled) {
+          const message = error && typeof error === "object" && "message" in error && typeof error.message === "string"
+            ? error.message
+            : "";
+          setLoadError(
+            message.toLowerCase().includes("platform_listings")
+              ? "Platform listings are being set up. Please try again shortly."
+              : "This section is temporarily unavailable.",
+          );
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -79,7 +87,7 @@ export default function PlatformListings({
       .channel(`platform-listings-${contentKey}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "site_content", filter: `key=eq.${contentKey}` },
+        { event: "*", schema: "public", table: "platform_listings", filter: `section_key=eq.${contentKey}` },
         () => void loadListings(),
       )
       .subscribe((status) => {

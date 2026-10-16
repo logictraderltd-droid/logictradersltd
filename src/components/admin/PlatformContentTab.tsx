@@ -155,17 +155,27 @@ export function PlatformContentTab() {
       setNotice("");
       try {
         const supabase = createBrowserClient();
-        const { data, error } = await supabase.from("site_content").select("value").eq("key", sectionKey).maybeSingle();
+        const { data, error } = await supabase
+          .from("platform_listings")
+          .select("*")
+          .eq("section_key", sectionKey)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false });
         if (error) throw error;
         if (!cancelled) {
-          setItems(Array.isArray(data?.value?.items) ? data.value.items : []);
+          setItems(Array.isArray(data) ? data as PlatformListing[] : []);
           setDraft(readStoredDraft(sectionKey));
         }
       } catch (error) {
         console.error("Unable to load platform content:", error);
         if (!cancelled) {
           setHasLoadError(true);
-          setNotice("Could not load this section. Check its Supabase permissions, then retry.");
+          const details = describeDatabaseError(error);
+          setNotice(
+            details.toLowerCase().includes("platform_listings")
+              ? `The platform listings table is not available. Run the platform listings migration in Supabase, then retry. ${details}`
+              : `Could not load this section. Check its Supabase permissions, then retry. ${details}`,
+          );
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -244,30 +254,40 @@ export function PlatformContentTab() {
     const savedListing = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
     try {
       const supabase = createBrowserClient();
-      const orderedItems = [...items].sort((a, b) => a.sort_order - b.sort_order);
-      const isEditing = orderedItems.some((item) => item.id === savedListing.id);
-      const nextItems = isEditing
-        ? orderedItems
-          .map((item) => item.id === savedListing.id ? savedListing : item)
-          .sort((a, b) => a.sort_order - b.sort_order)
-        : [savedListing, ...orderedItems];
-      const normalizedItems = nextItems.map((item, index) => ({ ...item, sort_order: index }));
+      const editing = items.some((item) => item.id === savedListing.id);
+      const payload = {
+        title: savedListing.title,
+        image_url: savedListing.image_url,
+        video_url: savedListing.video_url,
+        description: savedListing.description,
+        affiliate_url: savedListing.affiliate_url,
+        published: savedListing.published,
+        sort_order: editing
+          ? savedListing.sort_order
+          : Math.min(0, ...items.map((item) => item.sort_order)) - 1,
+        updated_at: new Date().toISOString(),
+      };
       const result = await withRequestTimeout(() =>
-        supabase
-          .from("site_content")
-          .upsert({
-            key: sectionKey,
-            value: { items: normalizedItems },
-            updated_at: new Date().toISOString(),
-          }, { onConflict: "key" })
-          .select("value")
-          .single(),
+        editing
+          ? supabase
+              .from("platform_listings")
+              .update(payload)
+              .eq("section_key", sectionKey)
+              .eq("id", savedListing.id)
+              .select("*")
+              .single()
+          : supabase
+              .from("platform_listings")
+              .insert({ ...payload, section_key: sectionKey, id: savedListing.id })
+              .select("*")
+              .single(),
       );
       const { data, error } = result;
       if (error) throw error;
-      const savedItems = data?.value?.items;
-      if (!Array.isArray(savedItems)) throw new Error("The database did not return the saved listings.");
-      setItems(savedItems as PlatformListing[]);
+      if (!data) throw new Error("The database did not return the saved listing.");
+      setItems((current) => editing
+        ? current.map((item) => item.id === savedListing.id ? data as PlatformListing : item)
+        : [data as PlatformListing, ...current]);
       notifyPlatformContentChanged(sectionKey);
       saveDraftLocally(sectionKey, null);
       setDraft(null);
@@ -290,26 +310,19 @@ export function PlatformContentTab() {
     setNotice("");
     try {
       const supabase = createBrowserClient();
-      const nextItems = [...items]
-        .filter((entry) => entry.id !== item.id)
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map((entry, index) => ({ ...entry, sort_order: index }));
       const result = await withRequestTimeout(() =>
         supabase
-          .from("site_content")
-          .upsert({
-            key: sectionKey,
-            value: { items: nextItems },
-            updated_at: new Date().toISOString(),
-          }, { onConflict: "key" })
-          .select("value")
+          .from("platform_listings")
+          .delete()
+          .eq("section_key", sectionKey)
+          .eq("id", item.id)
+          .select("id")
           .single(),
       );
       const { data, error } = result;
       if (error) throw error;
-      const savedItems = data?.value?.items;
-      if (!Array.isArray(savedItems)) throw new Error("The database did not return the saved listings.");
-      setItems(savedItems as PlatformListing[]);
+      if (!data) throw new Error("The database did not confirm the listing deletion.");
+      setItems((current) => current.filter((entry) => entry.id !== item.id));
       notifyPlatformContentChanged(sectionKey);
       setNotice(`"${item.title}" deleted.`);
     } catch (error) {
