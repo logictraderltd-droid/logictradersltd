@@ -254,10 +254,6 @@ export default function AdminDashboard() {
                     <PlatformContentTab />
                   )}
 
-                  {activeTab === "pro-firm" && (
-                    <PlatformContentTab initialSectionKey="pro_firm_listings" />
-                  )}
-
                   {activeTab === "settings" && (
                     <SettingsTab />
                   )}
