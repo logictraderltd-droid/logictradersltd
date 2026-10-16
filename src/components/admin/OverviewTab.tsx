@@ -43,7 +43,7 @@ export function OverviewTab({ stats, recentOrders, recentUsers, onNavigate }: Ov
                         Here's what's happening with your platform today. You have <span className="font-bold text-dark-950">{stats.activeSubscriptions} active subscriptions</span> generating revenue.
                     </p>
                 </div>
-                <div className="absolute right-0 top-0 h-full w-1/3 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+                <div className="absolute right-0 top-0 h-full w-1/3 bg-[url('/noise.svg')] opacity-20 mix-blend-overlay"></div>
                 <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/20 rounded-full blur-3xl"></div>
             </div>
 

@@ -27,6 +27,13 @@ const blankListing = (): PlatformListing => ({
 const getDraftStorageKey = (sectionKey: string) => `platform-content-draft:${sectionKey}`;
 const ACTIVE_SECTION_STORAGE_KEY = "platform-content-active-section";
 
+class DatabaseRequestTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`The database request exceeded the ${timeoutMs / 1000}-second client timeout. The server-side outcome is unconfirmed.`);
+    this.name = "DatabaseRequestTimeoutError";
+  }
+}
+
 function readStoredDraft(sectionKey: string): PlatformListing | null {
   try {
     const stored = window.localStorage.getItem(getDraftStorageKey(sectionKey));
@@ -97,8 +104,8 @@ function validOptionalUrl(value: string) {
 function describeDatabaseError(error: unknown) {
   if (error && typeof error === "object") {
     const databaseError = error as { code?: string; message?: string; details?: string; hint?: string };
-    if ("name" in error && error.name === "AbortError") {
-      return "The database request timed out after 20 seconds. Your draft is preserved; reload this section before retrying to confirm whether it reached the database.";
+    if ("name" in error && (error.name === "DatabaseRequestTimeoutError" || error.name === "AbortError")) {
+      return error instanceof Error ? error.message : "The database request was aborted; its server-side outcome is unconfirmed.";
     }
     return [databaseError.message, databaseError.details, databaseError.hint, databaseError.code ? `Code: ${databaseError.code}` : ""]
       .filter(Boolean)
@@ -116,7 +123,7 @@ function withRequestTimeout<T>(
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = window.setTimeout(() => {
       controller.abort();
-      reject(new Error(`The database request timed out after ${timeoutMs / 1000} seconds. Your draft is preserved; reload before retrying because the request may still finish on the server.`));
+      reject(new DatabaseRequestTimeoutError(timeoutMs));
     }, timeoutMs);
   });
 
@@ -144,6 +151,7 @@ export function PlatformContentTab() {
   const [notice, setNotice] = useState("");
   const draftSaveTimerRef = useRef<number | null>(null);
   const draftSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const saveInFlightRef = useRef(false);
 
   const section = contentSections.find((entry) => entry.key === sectionKey) ?? contentSections[0];
 
@@ -376,7 +384,7 @@ export function PlatformContentTab() {
 
   const saveListing = async (event: FormEvent) => {
     event.preventDefault();
-    if (!draft) return;
+    if (!draft || saveInFlightRef.current) return;
     if (
       !draft.title.trim() ||
       draft.title.trim().length > 160 ||
@@ -395,6 +403,7 @@ export function PlatformContentTab() {
       setNotice("This section has not loaded successfully. Retry loading it before saving so existing listings are not overwritten.");
       return;
     }
+    saveInFlightRef.current = true;
     setIsSaving(true);
     setNotice("");
     const savedListing = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
@@ -417,25 +426,49 @@ export function PlatformContentTab() {
           : Math.min(0, ...items.map((item) => item.sort_order)) - 1,
         updated_at: new Date().toISOString(),
       };
-      const result = await withRequestTimeout((signal) =>
-        editing
-          ? supabase
+      const listingPayload = { ...payload, section_key: sectionKey, id: savedListing.id };
+      let data: PlatformListing | null = null;
+      try {
+        const result = await withRequestTimeout((signal) =>
+          supabase
+            .from("platform_listings")
+            .upsert(listingPayload, { onConflict: "section_key,id" })
+            .abortSignal(signal)
+            .select("*")
+            .single(),
+        );
+        if (result.error) throw result.error;
+        data = result.data as PlatformListing;
+      } catch (saveError) {
+        if (!(saveError instanceof DatabaseRequestTimeoutError)) throw saveError;
+        let reconciliation;
+        try {
+          reconciliation = await withRequestTimeout((signal) =>
+            supabase
               .from("platform_listings")
-              .update(payload)
+              .select("*")
               .eq("section_key", sectionKey)
               .eq("id", savedListing.id)
               .abortSignal(signal)
-              .select("*")
-              .single()
-          : supabase
-              .from("platform_listings")
-              .insert({ ...payload, section_key: sectionKey, id: savedListing.id })
-              .abortSignal(signal)
-              .select("*")
-              .single(),
-      );
-      const { data, error } = result;
-      if (error) throw error;
+              .maybeSingle(),
+            8_000,
+          );
+        } catch (reconciliationError) {
+          throw new Error(
+            `Save timed out and its outcome could not be verified. Save: ${describeDatabaseError(saveError)} Verification: ${describeDatabaseError(reconciliationError)}`,
+          );
+        }
+        if (reconciliation.error) {
+          throw new Error(
+            `Save timed out and its outcome could not be verified. Save: ${describeDatabaseError(saveError)} Verification: ${describeDatabaseError(reconciliation.error)}`,
+          );
+        }
+        const expectedListing = { ...listingPayload };
+        if (!reconciliation.data || !listingsMatch(reconciliation.data as PlatformListing, expectedListing)) {
+          throw saveError;
+        }
+        data = reconciliation.data as PlatformListing;
+      }
       if (!data) throw new Error("The database did not return the saved listing.");
       if (draftSyncReady && draftOwnerId) {
         const cleanupDraft = draftSaveQueueRef.current
@@ -454,7 +487,7 @@ export function PlatformContentTab() {
           });
         void cleanupDraft.catch((error) => {
           console.error("Listing saved, but cloud draft cleanup failed:", error);
-          setNotice(`"${savedListing.title}" is published, but its private draft could not be cleaned up: ${describeDatabaseError(error)}`);
+          setNotice(`"${savedListing.title}" was saved, but its private draft could not be cleaned up: ${describeDatabaseError(error)}`);
         });
       }
       setItems((current) => editing
@@ -469,16 +502,18 @@ export function PlatformContentTab() {
       console.error("Unable to save platform content:", error);
       setNotice(`Could not save "${savedListing.title}". Your draft is preserved. ${describeDatabaseError(error)}`);
     } finally {
+      saveInFlightRef.current = false;
       setIsSaving(false);
     }
   };
 
   const deleteListing = async (item: PlatformListing) => {
-    if (isSaving || !window.confirm(`Delete "${item.title}"? This will remove it from the public site.`)) return;
+    if (isSaving || saveInFlightRef.current || !window.confirm(`Delete "${item.title}"? This will remove it from the public site.`)) return;
     if (hasLoadError || isLoading) {
       setNotice("This section has not loaded successfully. Retry loading it before deleting a listing.");
       return;
     }
+    saveInFlightRef.current = true;
     setIsSaving(true);
     setNotice("");
     try {
@@ -503,6 +538,7 @@ export function PlatformContentTab() {
       console.error("Unable to delete platform listing:", error);
       setNotice(`Could not delete "${item.title}". ${describeDatabaseError(error)}`);
     } finally {
+      saveInFlightRef.current = false;
       setIsSaving(false);
     }
   };
@@ -534,31 +570,36 @@ export function PlatformContentTab() {
   };
 
   const saveSignalLinks = async () => {
+    if (saveInFlightRef.current) return;
     if (!validOptionalUrl(communityUrl) || !validOptionalUrl(vipUrl)) {
       setNotice("Telegram destinations must be valid HTTP(S) URLs.");
       return;
     }
+    saveInFlightRef.current = true;
     setIsSaving(true);
     setNotice("");
     try {
       const supabase = createBrowserClient();
-      const [{ error: publicError }, { error: privateError }] = await Promise.all([
-        supabase.from("site_content").upsert(
-          { key: "signal_community_settings", value: { community_url: communityUrl.trim() }, updated_at: new Date().toISOString() },
-          { onConflict: "key" },
-        ),
-        supabase.from("platform_private_settings").upsert(
-          { key: "signal_vip_telegram", value: { url: vipUrl.trim() }, updated_at: new Date().toISOString() },
-          { onConflict: "key" },
-        ),
-      ]);
+      const [{ error: publicError }, { error: privateError }] = await withRequestTimeout((signal) =>
+        Promise.all([
+          supabase.from("site_content").upsert(
+            { key: "signal_community_settings", value: { community_url: communityUrl.trim() }, updated_at: new Date().toISOString() },
+            { onConflict: "key" },
+          ).abortSignal(signal),
+          supabase.from("platform_private_settings").upsert(
+            { key: "signal_vip_telegram", value: { url: vipUrl.trim() }, updated_at: new Date().toISOString() },
+            { onConflict: "key" },
+          ).abortSignal(signal),
+        ]),
+      );
       if (publicError) throw publicError;
       if (privateError) throw privateError;
       setNotice("Signal community links saved.");
     } catch (error) {
       console.error("Unable to save signal links:", error);
-      setNotice("Could not save signal links. Check the Supabase admin policy.");
+      setNotice(`Could not save signal links. ${describeDatabaseError(error)}`);
     } finally {
+      saveInFlightRef.current = false;
       setIsSaving(false);
     }
   };
