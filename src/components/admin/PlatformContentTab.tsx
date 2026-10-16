@@ -108,17 +108,19 @@ function describeDatabaseError(error: unknown) {
 }
 
 function withRequestTimeout<T>(
-  request: () => PromiseLike<T>,
+  request: (signal: AbortSignal) => PromiseLike<T>,
   timeoutMs = 20_000,
 ): Promise<T> {
+  const controller = new AbortController();
   let timeoutId: number | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = window.setTimeout(() => {
+      controller.abort();
       reject(new Error(`The database request timed out after ${timeoutMs / 1000} seconds. Your draft is preserved; reload before retrying because the request may still finish on the server.`));
     }, timeoutMs);
   });
 
-  const pendingRequest = Promise.resolve().then(request);
+  const pendingRequest = Promise.resolve().then(() => request(controller.signal));
   return Promise.race([pendingRequest, timeout])
     .finally(() => {
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
@@ -181,35 +183,48 @@ export function PlatformContentTab() {
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError) throw authError;
         if (!authData.user) throw new Error("Your admin session could not be verified. Sign in again before editing listings.");
-        const [listingsResult, draftsResult] = await Promise.all([
-          supabase
-            .from("platform_listings")
-            .select("*")
-            .eq("section_key", sectionKey)
-            .order("sort_order", { ascending: true })
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("platform_listing_drafts")
-            .select("listing_id, value")
-            .eq("user_id", authData.user.id)
-            .eq("section_key", sectionKey)
-            .order("updated_at", { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-        ]);
-        if (listingsResult.error) throw listingsResult.error;
-        if (draftsResult.error) throw draftsResult.error;
-        if (!cancelled) {
-          const loadedItems = Array.isArray(listingsResult.data) ? listingsResult.data as PlatformListing[] : [];
-          const cloudDraft = draftsResult.data
-            ? parseListingDraft({ ...draftsResult.data.value, id: draftsResult.data.listing_id })
+        const { data: listings, error: listingsError } = await supabase
+          .from("platform_listings")
+          .select("*")
+          .eq("section_key", sectionKey)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false });
+        if (listingsError) throw listingsError;
+
+        let cloudDraft: PlatformListing | null = null;
+        let cloudDraftError: unknown = null;
+        try {
+          const { data: draftData, error: draftsError } = await withRequestTimeout((signal) =>
+            supabase
+              .from("platform_listing_drafts")
+              .select("listing_id, value")
+              .eq("user_id", authData.user.id)
+              .eq("section_key", sectionKey)
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .abortSignal(signal)
+              .maybeSingle(),
+          8_000);
+          if (draftsError) throw draftsError;
+          cloudDraft = draftData
+            ? parseListingDraft({ ...draftData.value, id: draftData.listing_id })
             : null;
+        } catch (error) {
+          cloudDraftError = error;
+          console.error("Unable to load cloud platform listing draft:", error);
+        }
+
+        if (!cancelled) {
+          const loadedItems = Array.isArray(listings) ? listings as PlatformListing[] : [];
           const matchingSavedItem = cloudDraft && loadedItems.find((item) => listingsMatch(item, cloudDraft));
           setItems(loadedItems);
           setDraft(matchingSavedItem ? null : cloudDraft ?? readStoredDraft(sectionKey));
-          setDraftSaveStatus(matchingSavedItem || cloudDraft ? "saved" : "idle");
+          setDraftSaveStatus(cloudDraftError ? "error" : matchingSavedItem || cloudDraft ? "saved" : "idle");
           setDraftOwnerId(authData.user.id);
-          setDraftSyncReady(true);
+          setDraftSyncReady(!cloudDraftError);
+          if (cloudDraftError) {
+            setNotice(`Listings loaded. Cross-browser draft sync is unavailable, but saving listings still works. ${describeDatabaseError(cloudDraftError)}`);
+          }
           if (matchingSavedItem) {
             void supabase
               .from("platform_listing_drafts")
@@ -228,10 +243,8 @@ export function PlatformContentTab() {
           setHasLoadError(true);
           const details = describeDatabaseError(error);
           setNotice(
-            details.toLowerCase().includes("platform_listing_drafts")
-              ? `Cloud draft storage is not available. Run the platform listing drafts migration in Supabase, then retry. ${details}`
-              : details.toLowerCase().includes("platform_listings")
-                ? `The platform listings table is not available. Run the platform listings migration in Supabase, then retry. ${details}`
+            details.toLowerCase().includes("platform_listings")
+              ? `The platform listings table is not available. Run the platform listings migration in Supabase, then retry. ${details}`
               : `Could not load this section. Check its Supabase permissions, then retry. ${details}`,
           );
         }
@@ -244,8 +257,8 @@ export function PlatformContentTab() {
   }, [sectionKey, loadAttempt, hasRestoredSection]);
 
   const saveDraftToCloud = (listing: PlatformListing, key: string, ownerId: string) => {
-    const save = async () => {
-      const { error } = await createBrowserClient()
+    const save = (signal: AbortSignal) =>
+      createBrowserClient()
         .from("platform_listing_drafts")
         .upsert({
           user_id: ownerId,
@@ -261,12 +274,16 @@ export function PlatformContentTab() {
             sort_order: listing.sort_order,
           },
           updated_at: new Date().toISOString(),
-        }, { onConflict: "user_id,section_key,listing_id" });
-      if (error) throw error;
-    };
-    const queuedSave = draftSaveQueueRef.current.catch(() => undefined).then(save);
+        }, { onConflict: "user_id,section_key,listing_id" })
+        .abortSignal(signal);
+    const queuedSave = draftSaveQueueRef.current
+      .catch(() => undefined)
+      .then(() => withRequestTimeout(save, 10_000))
+      .then(({ error }) => {
+        if (error) throw error;
+      });
     draftSaveQueueRef.current = queuedSave;
-    return withRequestTimeout(() => queuedSave, 10_000);
+    return queuedSave;
   };
 
   useEffect(() => {
@@ -275,6 +292,10 @@ export function PlatformContentTab() {
     setDraftSaveStatus("saving");
     const timerId = window.setTimeout(() => {
       draftSaveTimerRef.current = null;
+      if (!draftSyncReady) {
+        setDraftSaveStatus("error");
+        return;
+      }
       void saveDraftToCloud(draft, sectionKey, draftOwnerId).then(() => {
         if (!cancelled) setDraftSaveStatus("saved");
       }).catch((error) => {
@@ -286,9 +307,10 @@ export function PlatformContentTab() {
       });
     }, 400);
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== "hidden") return;
+      if (document.visibilityState !== "hidden" || draftSaveTimerRef.current !== timerId) return;
       window.clearTimeout(timerId);
       if (draftSaveTimerRef.current === timerId) draftSaveTimerRef.current = null;
+      if (!draftSyncReady) return;
       void saveDraftToCloud(draft, sectionKey, draftOwnerId).then(() => {
         if (!cancelled) setDraftSaveStatus("saved");
       }).catch((error) => {
@@ -377,15 +399,10 @@ export function PlatformContentTab() {
     setNotice("");
     const savedListing = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
     try {
-      if (!draftOwnerId || !draftSyncReady) {
-        throw new Error("Your admin session is not ready to save drafts. Reload the section and retry.");
-      }
       if (draftSaveTimerRef.current !== null) {
         window.clearTimeout(draftSaveTimerRef.current);
         draftSaveTimerRef.current = null;
       }
-      await saveDraftToCloud(savedListing, sectionKey, draftOwnerId);
-      setDraftSaveStatus("saved");
       const supabase = createBrowserClient();
       const editing = items.some((item) => item.id === savedListing.id);
       const payload = {
@@ -400,32 +417,45 @@ export function PlatformContentTab() {
           : Math.min(0, ...items.map((item) => item.sort_order)) - 1,
         updated_at: new Date().toISOString(),
       };
-      const result = await withRequestTimeout(() =>
+      const result = await withRequestTimeout((signal) =>
         editing
           ? supabase
               .from("platform_listings")
               .update(payload)
               .eq("section_key", sectionKey)
               .eq("id", savedListing.id)
+              .abortSignal(signal)
               .select("*")
               .single()
           : supabase
               .from("platform_listings")
               .insert({ ...payload, section_key: sectionKey, id: savedListing.id })
+              .abortSignal(signal)
               .select("*")
               .single(),
       );
       const { data, error } = result;
       if (error) throw error;
       if (!data) throw new Error("The database did not return the saved listing.");
-      const { error: draftDeleteError } = await supabase
-        .from("platform_listing_drafts")
-        .delete()
-        .eq("user_id", draftOwnerId)
-        .eq("section_key", sectionKey)
-        .eq("listing_id", savedListing.id);
-      if (draftDeleteError) {
-        console.error("Listing saved, but cloud draft cleanup failed:", draftDeleteError);
+      if (draftSyncReady && draftOwnerId) {
+        const cleanupDraft = draftSaveQueueRef.current
+          .catch(() => undefined)
+          .then(() => withRequestTimeout((signal) =>
+            supabase
+              .from("platform_listing_drafts")
+              .delete()
+              .eq("user_id", draftOwnerId)
+              .eq("section_key", sectionKey)
+              .eq("listing_id", savedListing.id)
+              .abortSignal(signal),
+          8_000))
+          .then(({ error }) => {
+            if (error) throw error;
+          });
+        void cleanupDraft.catch((error) => {
+          console.error("Listing saved, but cloud draft cleanup failed:", error);
+          setNotice(`"${savedListing.title}" is published, but its private draft could not be cleaned up: ${describeDatabaseError(error)}`);
+        });
       }
       setItems((current) => editing
         ? current.map((item) => item.id === savedListing.id ? data as PlatformListing : item)
@@ -434,9 +464,7 @@ export function PlatformContentTab() {
       saveDraftLocally(sectionKey, null);
       setDraft(null);
       setDraftSaveStatus("idle");
-      setNotice(draftDeleteError
-        ? `"${savedListing.title}" saved. Its old cloud draft could not be removed, but it will not replace the saved listing.`
-        : `"${savedListing.title}" saved successfully.`);
+      setNotice(`"${savedListing.title}" saved successfully.`);
     } catch (error) {
       console.error("Unable to save platform content:", error);
       setNotice(`Could not save "${savedListing.title}". Your draft is preserved. ${describeDatabaseError(error)}`);
@@ -455,12 +483,13 @@ export function PlatformContentTab() {
     setNotice("");
     try {
       const supabase = createBrowserClient();
-      const result = await withRequestTimeout(() =>
+      const result = await withRequestTimeout((signal) =>
         supabase
           .from("platform_listings")
           .delete()
           .eq("section_key", sectionKey)
           .eq("id", item.id)
+          .abortSignal(signal)
           .select("id")
           .single(),
       );
@@ -488,7 +517,7 @@ export function PlatformContentTab() {
     setDraft(null);
     saveDraftLocally(sectionKey, null);
     setDraftSaveStatus("idle");
-    if (!draftOwnerId) return;
+    if (!draftOwnerId || !draftSyncReady) return;
     try {
       await saveDraftToCloud(cancelledDraft, sectionKey, draftOwnerId);
       const { error } = await createBrowserClient()
