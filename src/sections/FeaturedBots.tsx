@@ -55,7 +55,11 @@ export default function FeaturedBots() {
           .filter((item: any) => (item.product_type ?? item.type ?? "").toString().toLowerCase() === "bot")
           .slice(0, 2);
 
-        setBots(botItems.map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "bot" })));
+        setBots(botItems.map((item: any) => ({
+          ...item,
+          type: item.product_type ?? item.type ?? "bot",
+          price: Number(item.price ?? (Number(item.price_cents ?? 0) / 100)),
+        })));
       } catch (error) {
         console.error("Unable to load featured bots:", error);
         setBots([]);

@@ -1,5 +1,6 @@
 -- LOGICTRADERSLTD Database Schema
--- Production-ready schema for trading platform e-commerce
+-- Fresh-database bootstrap only. Do not run this whole file against an existing
+-- Supabase project; use a reviewed migration for changes to an existing database.
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -73,6 +74,7 @@ CREATE TABLE signal_plans (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   interval TEXT NOT NULL CHECK (interval IN ('weekly', 'monthly')),
+  duration_days INTEGER NOT NULL DEFAULT 30,
   features TEXT[] DEFAULT '{}',
   UNIQUE(product_id)
 );
@@ -261,6 +263,23 @@ ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_access ENABLE ROW LEVEL SECURITY;
 ALTER TABLE site_content ENABLE ROW LEVEL SECURITY;
 
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users
+    WHERE id = auth.uid()
+      AND role = 'admin'
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
+
 -- Users policies
 CREATE POLICY "Users can view own data" ON users
   FOR SELECT USING (auth.uid() = id);
@@ -301,9 +320,12 @@ CREATE POLICY "Anyone can view active products" ON products
   FOR SELECT USING (is_active = true);
 
 CREATE POLICY "Admin can manage products" ON products
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
-  );
+  FOR ALL USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+CREATE POLICY "Admin can manage trading bots" ON trading_bots
+  FOR ALL USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 
 -- Course lessons policies
 CREATE POLICY "Users with access can view lessons" ON course_lessons

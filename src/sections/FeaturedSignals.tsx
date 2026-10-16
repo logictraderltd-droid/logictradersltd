@@ -58,7 +58,7 @@ export default function FeaturedSignals() {
         setPlans(signalItems
           .map((item: any) => ({
             ...item,
-            price: Number(item.price ?? 0),
+            price: Number(item.price ?? (Number(item.price_cents ?? 0) / 100)),
             type: item.product_type ?? item.type ?? "signal",
           }))
           .sort((a: any, b: any) => Number(a.price ?? 0) - Number(b.price ?? 0)));

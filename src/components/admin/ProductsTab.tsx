@@ -21,6 +21,14 @@ const formatProductPrice = (price: number, currency?: string) => {
 const getProductType = (product: Product | Partial<Product> | null | undefined) =>
     (product?.type ?? product?.product_type ?? 'course') as Product['type'];
 
+const isMissingSchemaField = (error: any, field: string) =>
+    (error?.code === 'PGRST204' || error?.code === '42703') &&
+    `${error?.message || ''} ${error?.details || ''}`.toLowerCase().includes(field.toLowerCase());
+
+const isMissingRelation = (error: any, relation: string) =>
+    (error?.code === 'PGRST205' || error?.code === '42P01') &&
+    `${error?.message || ''} ${error?.details || ''}`.toLowerCase().includes(relation.toLowerCase());
+
 interface ProductsTabProps {
     products: Product[];
     onRefresh: () => void;
@@ -122,7 +130,21 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                     .eq('product_id', product.id)
                     .limit(1)
                     .maybeSingle();
-                if (error) {
+                if (isMissingRelation(error, 'bot_links')) {
+                    const { data: tradingBot, error: tradingBotError } = await supabase
+                        .from('trading_bots')
+                        .select('download_url, setup_instructions')
+                        .eq('product_id', product.id)
+                        .limit(1)
+                        .maybeSingle();
+                    if (tradingBotError) {
+                        setNotification({ type: 'error', message: tradingBotError.message });
+                    } else if (tradingBot) {
+                        setDownloadUrl(tradingBot.download_url || "");
+                        setBotInstructions(tradingBot.setup_instructions || "");
+                        setVisitUrl(tradingBot.setup_instructions || "");
+                    }
+                } else if (error) {
                     setNotification({ type: 'error', message: error.message });
                 } else if (botLink) {
                     setVisitUrl(botLink.link_url || "");
@@ -206,89 +228,108 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             if (productType === 'bot' && botDeliveryMethod === 'manual_email' && !visitUrl.trim() && !botInstructions.trim()) {
                 throw new Error("Manual delivery requires a delivery link or delivery instructions.");
             }
-
-            // Prepare payload using the live Supabase schema.
-            const payload: any = {
-                name: formData.name,
-                description: formData.description,
-                product_type: productType,
-                price_cents: Math.round(priceValue * 100),
-                is_active: formData.is_active,
-                thumbnail_url: formData.thumbnail_url || null,
-                metadata: {
-                    ...(editingProduct?.metadata || {}),
-                    is_free: formData.type === 'course' && isFreeCourse,
-                    level: formData.type === 'course' ? level : (editingProduct?.metadata?.level ?? level),
-                    delivery_method: formData.type === 'bot' ? botDeliveryMethod : (editingProduct?.metadata?.delivery_method ?? null),
-                    bot_type: formData.type === 'bot' ? botType.trim() : (editingProduct?.metadata?.bot_type ?? null),
-                    demo_video_url: formData.type === 'bot' ? botVideoUrl.trim() : (editingProduct?.metadata?.demo_video_url ?? null),
-                    duration_days: formData.type === 'signal' ? signalDurationDays : (editingProduct?.metadata?.duration_days ?? null),
+            if (productType === 'signal' && signalDurationDays === 365) {
+                const { error: durationSchemaError } = await supabase
+                    .from('signal_plans')
+                    .select('duration_days')
+                    .limit(0);
+                if (isMissingSchemaField(durationSchemaError, 'duration_days')) {
+                    throw new Error("This database schema only supports weekly/monthly signal plans. Add the duration_days column before creating a yearly signal plan.");
                 }
+                if (durationSchemaError) throw durationSchemaError;
+            }
+
+            const metadata: Record<string, any> = {
+                ...(editingProduct?.metadata || {}),
+                is_free: formData.type === 'course' && isFreeCourse,
+                level: formData.type === 'course' ? level : (editingProduct?.metadata?.level ?? level),
+                delivery_method: formData.type === 'bot' ? botDeliveryMethod : (editingProduct?.metadata?.delivery_method ?? null),
+                bot_type: formData.type === 'bot' ? botType.trim() : (editingProduct?.metadata?.bot_type ?? null),
+                demo_video_url: formData.type === 'bot' ? botVideoUrl.trim() : (editingProduct?.metadata?.demo_video_url ?? null),
+                duration_days: formData.type === 'signal' ? signalDurationDays : (editingProduct?.metadata?.duration_days ?? null),
+                interval: formData.type === 'signal' ? (signalDurationDays === 365 ? 'year' : 'month') : (editingProduct?.metadata?.interval ?? null),
+                students: studentsCount,
+                rating,
+                requirements,
             };
 
-            delete payload.type;
-            delete payload.price;
-            delete payload.currency;
+            // The supplied schema uses products.type and products.price. A fallback
+            // keeps installations using product_type/price_cents working as well.
+            const schemaProductPayload: Record<string, any> = {
+                name: formData.name,
+                description: formData.description,
+                type: productType,
+                price: priceValue,
+                currency: 'USD',
+                is_active: formData.is_active,
+                thumbnail_url: formData.thumbnail_url || null,
+                metadata,
+            };
 
             // Add type-specific fields
             if (formData.type === 'course') {
-                payload.metadata.video_url = videoUrl;
-                payload.metadata.level = level;
-                payload.metadata.duration = duration;
-                payload.metadata.instructor = instructor;
-                payload.metadata.lessons = lessonsCount;
-                payload.metadata.what_you_learn = listItems;
+                metadata.video_url = videoUrl;
+                metadata.level = level;
+                metadata.duration = duration;
+                metadata.instructor = instructor;
+                metadata.lessons = lessonsCount;
+                metadata.what_you_learn = listItems;
             } else if (formData.type === 'bot') {
-                payload.metadata.features = listItems;
+                metadata.features = listItems;
             } else if (formData.type === 'signal') {
-                payload.metadata.features = listItems;
+                metadata.features = listItems;
             }
-            delete payload.metadata.visit_url;
-            delete payload.metadata.download_url;
-            delete payload.metadata.instructions;
 
-            // Global metadata
-            payload.metadata.students = studentsCount;
-            payload.metadata.rating = rating;
-            payload.metadata.requirements = requirements;
+            if (!schemaProductPayload.thumbnail_url) delete schemaProductPayload.thumbnail_url;
 
-            // Cleanup payload
-            if (!payload.thumbnail_url) delete payload.thumbnail_url;
-
-            // Remove 'id' if present in payload to prevent PK update errors on insert
-            delete payload.id;
-            delete payload.created_at;
-            delete payload.updated_at;
-
-            console.log("Payload:", payload);
+            const compatibilityProductPayload = {
+                name: schemaProductPayload.name,
+                description: schemaProductPayload.description,
+                product_type: productType,
+                price_cents: Math.round(priceValue * 100),
+                is_active: schemaProductPayload.is_active,
+                ...(schemaProductPayload.thumbnail_url ? { thumbnail_url: schemaProductPayload.thumbnail_url } : {}),
+                metadata,
+            };
 
             let savedProductId = editingProduct?.id || null;
 
             if (editingProduct) {
-                console.log("Updating product:", editingProduct.id);
-                // We add .select() only if we specifically need the returned data, 
-                // but for simple updates, removing it avoids recursive RLS checks in some cases.
-                const { error: updateError } = await supabase
+                let { error: updateError } = await supabase
                     .from("products")
-                    .update(payload)
+                    .update(schemaProductPayload)
                     .eq("id", editingProduct.id);
+                if (isMissingSchemaField(updateError, 'type') || isMissingSchemaField(updateError, 'price')) {
+                    const compatibilityPayload = { ...compatibilityProductPayload };
+                    ({ error: updateError } = await supabase
+                        .from("products")
+                        .update(compatibilityPayload)
+                        .eq("id", editingProduct.id));
+                }
                 if (updateError) throw updateError;
             } else {
-                console.log("Creating new product");
-                const { data: insertedProduct, error: insertError } = await supabase
+                let { data: insertedProduct, error: insertError } = await supabase
                     .from("products")
-                    .insert([payload])
+                    .insert(schemaProductPayload)
                     .select('id')
                     .single();
+                if (isMissingSchemaField(insertError, 'type') || isMissingSchemaField(insertError, 'price')) {
+                    ({ data: insertedProduct, error: insertError } = await supabase
+                        .from("products")
+                        .insert(compatibilityProductPayload)
+                        .select('id')
+                        .single());
+                }
                 if (insertError) throw insertError;
+                if (!insertedProduct) throw new Error("Supabase did not return the newly created product ID.");
                 savedProductId = insertedProduct.id;
-                setEditingProduct({ ...payload, id: insertedProduct.id } as Product);
+                setEditingProduct({ ...schemaProductPayload, id: insertedProduct.id } as Product);
             }
 
             if (productType === 'bot' && savedProductId) {
                 const botLinkPayload = {
                     product_id: savedProductId,
-                    link_url: visitUrl.trim() || null,
+                    link_url: visitUrl.trim() || downloadUrl.trim() || null,
                     download_url: downloadUrl.trim() || null,
                     instructions: botInstructions.trim() || null,
                 };
@@ -298,12 +339,24 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                     .eq('product_id', savedProductId)
                     .limit(1)
                     .maybeSingle();
-                if (lookupError) throw lookupError;
-
-                const { error: botLinkError } = existingBotLink
-                    ? await supabase.from('bot_links').update(botLinkPayload).eq('id', existingBotLink.id)
-                    : await supabase.from('bot_links').insert(botLinkPayload);
-                if (botLinkError) throw botLinkError;
+                if (isMissingRelation(lookupError, 'bot_links')) {
+                    const tradingBotPayload = {
+                        product_id: savedProductId,
+                        download_url: downloadUrl.trim() || null,
+                        setup_instructions: botInstructions.trim() || visitUrl.trim() || null,
+                        requirements,
+                    };
+                    const { error: tradingBotError } = await supabase
+                        .from('trading_bots')
+                        .upsert(tradingBotPayload, { onConflict: 'product_id' });
+                    if (tradingBotError) throw tradingBotError;
+                } else {
+                    if (lookupError) throw lookupError;
+                    const { error: botLinkError } = existingBotLink
+                        ? await supabase.from('bot_links').update(botLinkPayload).eq('id', existingBotLink.id)
+                        : await supabase.from('bot_links').insert(botLinkPayload);
+                    if (botLinkError) throw botLinkError;
+                }
             }
 
             if (productType === 'signal' && savedProductId) {
@@ -313,12 +366,45 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                     .eq('product_id', savedProductId)
                     .limit(1)
                     .maybeSingle();
-                if (planLookupError) throw planLookupError;
+                if (planLookupError && !isMissingSchemaField(planLookupError, 'duration_days')) throw planLookupError;
 
                 const planPayload = { product_id: savedProductId, duration_days: signalDurationDays };
-                const { error: planSaveError } = existingPlan
-                    ? await supabase.from('signal_plans').update(planPayload).eq('id', existingPlan.id)
-                    : await supabase.from('signal_plans').insert(planPayload);
+                let planSaveError: any;
+                if (!planLookupError) {
+                    ({ error: planSaveError } = existingPlan
+                        ? await supabase.from('signal_plans').update(planPayload).eq('id', existingPlan.id)
+                        : await supabase.from('signal_plans').insert(planPayload));
+                    if (isMissingSchemaField(planSaveError, 'duration_days')) {
+                        if (signalDurationDays === 365) {
+                            throw new Error("This database schema only supports weekly/monthly signal plans. Add the duration_days column before creating a yearly signal plan.");
+                        }
+                        const legacyPlanPayload = { product_id: savedProductId, interval: 'monthly', features: listItems };
+                        const { error } = existingPlan
+                            ? await supabase.from('signal_plans').update(legacyPlanPayload).eq('id', existingPlan.id)
+                            : await supabase.from('signal_plans').insert(legacyPlanPayload);
+                        planSaveError = error;
+                    }
+                } else {
+                    if (signalDurationDays === 365) {
+                        throw new Error("This database schema only supports weekly/monthly signal plans. Add the duration_days column before creating a yearly signal plan.");
+                    }
+                    const legacyPlanPayload = { product_id: savedProductId, interval: 'monthly', features: listItems };
+                    const { error } = await supabase
+                        .from('signal_plans')
+                        .upsert(legacyPlanPayload, { onConflict: 'product_id' });
+                    planSaveError = error;
+                }
+                if (planSaveError?.code === '23502' && planSaveError.message?.toLowerCase().includes('interval')) {
+                    const compatiblePlanPayload = {
+                        ...planPayload,
+                        interval: 'monthly',
+                        features: listItems,
+                    };
+                    const { error } = existingPlan
+                        ? await supabase.from('signal_plans').update(compatiblePlanPayload).eq('id', existingPlan.id)
+                        : await supabase.from('signal_plans').insert(compatiblePlanPayload);
+                    planSaveError = error;
+                }
                 if (planSaveError) throw planSaveError;
             }
 
@@ -336,9 +422,10 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
 
         } catch (error: any) {
             console.error("Error saving product:", error);
+            const details = [error?.code, error?.details, error?.hint].filter(Boolean).join(" — ");
             setNotification({
                 type: 'error',
-                message: error.message || 'Failed to save product. Ensure you have admin permissions.'
+                message: [error?.message || 'Failed to save product.', details].filter(Boolean).join(" — ")
             });
         } finally {
             setIsLoading(false);

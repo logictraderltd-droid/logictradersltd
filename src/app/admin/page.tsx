@@ -114,7 +114,8 @@ export default function AdminDashboard() {
         const { data } = await supabase.from("users").select("*").order("created_at", { ascending: false });
         setUsers(data || []);
       } else if (activeTab === "products") {
-        const { data } = await supabase.from("products").select("*").order("created_at", { ascending: false });
+        const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false });
+        if (error) throw error;
         setProducts(normalizeProductRows(data || []));
       } else if (activeTab === "orders") {
         const { data } = await supabase.from("orders").select(`*, product:products(name), user:users(email)`).order("created_at", { ascending: false });
