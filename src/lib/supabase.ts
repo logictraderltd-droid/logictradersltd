@@ -42,6 +42,15 @@ export const normalizeProductRow = (product: any): Product => {
 export const normalizeProductRows = (products: any[] = []): Product[] =>
   products.map(normalizeProductRow);
 
+export const normalizeOrderRows = (orders: any[] = []): Order[] =>
+  orders.map((order) => ({
+    ...order,
+    amount: Number(order?.amount ?? (Number(order?.amount_cents ?? 0) / 100)),
+    amount_cents: Number(order?.amount_cents ?? Math.round(Number(order?.amount ?? 0) * 100)),
+    currency: order?.currency ?? order?.product?.currency ?? 'USD',
+    product_type: order?.product_type ?? order?.product?.product_type ?? 'course',
+  }));
+
 const mapUserProfile = (data: any): UserProfile => {
   const fullName = (data.full_name || '').trim();
   const nameParts = fullName.split(/\s+/);
@@ -283,7 +292,7 @@ export const db = {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      return normalizeOrderRows(data || []);
     },
 
     async create(order: Partial<Order>): Promise<Order> {
@@ -336,7 +345,7 @@ export const db = {
         `)
         .eq('user_id', userId)
         .eq('status', 'active')
-        .gte('current_period_end', new Date().toISOString())
+        .gte('ends_at', new Date().toISOString())
         .order('created_at', { ascending: false });
 
       if (error) throw error;

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { createBrowserClient, normalizeProductRows } from "@/lib/supabase";
+import { createBrowserClient, normalizeOrderRows, normalizeProductRows } from "@/lib/supabase";
 import { User, Product, Order, TradingSignal } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -18,6 +18,7 @@ import { SignalsTab } from "@/components/admin/SignalsTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
 import { ProFirmTab } from "@/components/admin/ProFirmTab";
 import { MarketingTab } from "@/components/admin/MarketingTab";
+import { PlatformContentTab } from "@/components/admin/PlatformContentTab";
 
 interface AdminStats {
   totalUsers: number;
@@ -66,14 +67,14 @@ export default function AdminDashboard() {
         { data: recentUsersData }
       ] = await Promise.all([
         supabase.from("users").select("*", { count: "exact", head: true }),
-        supabase.from("orders").select("amount").eq("status", "completed"),
+        supabase.from("orders").select("amount_cents").eq("status", "completed"),
         supabase.from("orders").select("*", { count: "exact", head: true }),
-        supabase.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "active"),
+        supabase.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "active").gt("ends_at", new Date().toISOString()),
         supabase.from("orders").select(`*, product:products(name), user:users(email)`).order("created_at", { ascending: false }).limit(5),
         supabase.from("users").select("*").order("created_at", { ascending: false }).limit(5)
       ]);
 
-      const totalRevenue = revenueData?.reduce((sum, order) => sum + order.amount, 0) || 0;
+      const totalRevenue = revenueData?.reduce((sum, order) => sum + Number(order.amount_cents || 0) / 100, 0) || 0;
 
       setStats({
         totalUsers: totalUsers || 0,
@@ -82,7 +83,7 @@ export default function AdminDashboard() {
         activeSubscriptions: activeSubscriptions || 0,
       });
 
-      setRecentOrders(recentOrdersData || []);
+      setRecentOrders(normalizeOrderRows(recentOrdersData || []));
       setRecentUsers(recentUsersData || []);
       dataFetchedRef.current['overview'] = true;
 
@@ -117,7 +118,7 @@ export default function AdminDashboard() {
         setProducts(normalizeProductRows(data || []));
       } else if (activeTab === "orders") {
         const { data } = await supabase.from("orders").select(`*, product:products(name), user:users(email)`).order("created_at", { ascending: false });
-        setOrders(data || []);
+        setOrders(normalizeOrderRows(data || []));
       } else if (activeTab === "signals") {
         const { data } = await supabase.from("signals").select("*").order("created_at", { ascending: false });
         setSignals(data || []);
@@ -246,6 +247,10 @@ export default function AdminDashboard() {
                     <MarketingTab />
                   )}
 
+                  {activeTab === "content" && (
+                    <PlatformContentTab />
+                  )}
+
                   {activeTab === "pro-firm" && (
                     <ProFirmTab />
                   )}
@@ -263,4 +268,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-

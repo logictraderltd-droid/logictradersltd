@@ -84,7 +84,7 @@ export default function WatchLessonPage({
       // Fetch course
       const { data: courseData } = await supabase
         .from("products")
-        .select("id, name")
+        .select("id, name, is_active, metadata")
         .eq("id", lessonData.product_id)
         .single();
 
@@ -99,17 +99,20 @@ export default function WatchLessonPage({
 
       setAllLessons(lessonsData || []);
 
-      // Check access
-      if (user) {
+      // Free courses require a signed-in account; paid courses require an unexpired entitlement.
+      const isFreeCourse = courseData?.is_active === true && courseData.metadata?.is_free === true;
+      if (user && isFreeCourse) {
+        setHasAccess(true);
+      } else if (user) {
         const { data: accessData } = await supabase
           .from("user_access")
           .select("*")
           .eq("user_id", user.id)
           .eq("product_id", lessonData.product_id)
           .eq("is_active", true)
-          .single();
+          .maybeSingle();
 
-        const access = !!accessData;
+        const access = !!accessData && (!accessData.expires_at || new Date(accessData.expires_at) > new Date());
         setHasAccess(access);
 
         if (access) {

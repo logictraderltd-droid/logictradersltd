@@ -41,6 +41,7 @@ interface Course {
     students?: number;
     rating?: number;
     instructor?: string;
+    is_free?: boolean;
     what_you_learn?: string[];
     requirements?: string[];
   };
@@ -87,16 +88,18 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       setLessons(lessonsData || []);
 
       // Check if user has access
-      if (user) {
+      const isFreeCourse = courseData.is_active === true && courseData.metadata?.is_free === true;
+      if (isAuthenticated && isFreeCourse) setHasAccess(true);
+      if (user && !isFreeCourse) {
         const { data: accessData } = await supabase
           .from("user_access")
           .select("*")
           .eq("user_id", user.id)
           .eq("product_id", params.id)
           .eq("is_active", true)
-          .single();
+          .maybeSingle();
 
-        setHasAccess(!!accessData);
+        setHasAccess(!!accessData && (!accessData.expires_at || new Date(accessData.expires_at) > new Date()));
       }
     } catch (error) {
       console.error("Error fetching course:", error);
@@ -106,6 +109,14 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   };
 
   const handleEnroll = () => {
+    if (course?.metadata?.is_free) {
+      if (!isAuthenticated) {
+        router.push(`/login?redirect=/courses/${params.id}`);
+      } else {
+        router.push(`/dashboard/courses/${params.id}`);
+      }
+      return;
+    }
     if (!isAuthenticated) {
       router.push(`/login?redirect=/courses/${params.id}`);
       return;
@@ -165,12 +176,12 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                     {course.metadata.level}
                   </span>
                 )}
-                <div className="flex items-center text-gray-400">
+                {course.metadata?.rating && <div className="flex items-center text-gray-400">
                   <Star className="w-4 h-4 text-gold-400 fill-gold-400 mr-1" />
-                  <span>{course.metadata?.rating || "4.8"}</span>
+                  <span>{course.metadata.rating}</span>
                   <span className="mx-2">•</span>
-                  <span>{course.metadata?.students || "1,234"} students</span>
-                </div>
+                  <span>{course.metadata?.students ? `${course.metadata.students} students` : "Course access"}</span>
+                </div>}
               </div>
 
               <h1 className="text-4xl font-bold mb-4 gold-gradient-text">
@@ -201,7 +212,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
               {/* Price and CTA */}
               <div className="flex items-center space-x-4">
                 <div className="text-3xl font-bold gold-gradient-text">
-                  ${course.price}
+                  {course.metadata?.is_free ? "Free" : `$${course.price}`}
                 </div>
                 {hasAccess ? (
                   <button
@@ -214,7 +225,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 ) : (
                   <button onClick={handleEnroll} className="gold-button flex items-center">
                     <ShoppingCart className="w-5 h-5 mr-2" />
-                    Enroll Now
+                    {course.metadata?.is_free ? "Sign in to start free course" : "Enroll Now"}
                   </button>
                 )}
               </div>

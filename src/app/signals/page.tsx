@@ -3,15 +3,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Bell, Check, TrendingUp, ArrowRight, Star } from "lucide-react";
+import { Bell, Check, TrendingUp, ArrowRight, Star, Send } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 import { SignalPlan } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export default function SignalsPage() {
   const [plans, setPlans] = useState<SignalPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [communityUrl, setCommunityUrl] = useState("");
+  const [vipUrl, setVipUrl] = useState("");
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -28,7 +32,7 @@ export default function SignalsPage() {
           .filter((item: any) => (item.product_type ?? item.type ?? "").toString().toLowerCase() === "signal")
           .map((item: any) => ({
             ...item,
-            price: Number(item.price ?? 0),
+            price: Number(item.price ?? (Number(item.price_cents ?? 0) / 100)),
             type: item.product_type ?? item.type ?? "signal",
           }))
           .sort((a: any, b: any) => Number(a.price ?? 0) - Number(b.price ?? 0)));
@@ -38,6 +42,48 @@ export default function SignalsPage() {
 
     fetchPlans();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadCommunity = async () => {
+      const { data, error } = await createBrowserClient()
+        .from("site_content")
+        .select("value")
+        .eq("key", "signal_community_settings")
+        .maybeSingle();
+      if (error) {
+        console.error("Unable to load public signal community link:", error);
+        return;
+      }
+      const url = data?.value?.community_url;
+      if (!cancelled && typeof url === "string" && /^https?:\/\//i.test(url)) setCommunityUrl(url);
+    };
+    void loadCommunity();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadVipLink = async () => {
+      if (!user) {
+        setVipUrl("");
+        return;
+      }
+      const response = await fetch("/api/signals/vip-link");
+      if (response.status === 403 || response.status === 401) {
+        setVipUrl("");
+        return;
+      }
+      if (!response.ok) {
+        console.error("Unable to load VIP Telegram link.");
+        return;
+      }
+      const result = await response.json();
+      if (!cancelled && typeof result.url === "string") setVipUrl(result.url);
+    };
+    void loadVipLink();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const getFeatures = (plan: SignalPlan): string[] => {
     return plan.metadata?.features || [
@@ -69,54 +115,26 @@ export default function SignalsPage() {
               Professional <span className="gold-gradient-text">Signal Plans</span>
             </h1>
             <p className="text-gray-400 max-w-2xl mx-auto">
-              Get real-time trading signals from our expert analysts. High-accuracy entries 
-              with clear stop loss and take profit levels.
+              Review each signal with its entry, stop-loss, and take-profit levels. Signals are informational and do not guarantee trading outcomes.
             </p>
           </motion.div>
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="pb-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="dark-card p-6 text-center"
-            >
-              <div className="text-3xl font-bold gold-gradient-text mb-1">95%</div>
-              <div className="text-sm text-gray-500">Accuracy Rate</div>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="dark-card p-6 text-center"
-            >
-              <div className="text-3xl font-bold gold-gradient-text mb-1">10+</div>
-              <div className="text-sm text-gray-500">Signals Daily</div>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="dark-card p-6 text-center"
-            >
-              <div className="text-3xl font-bold gold-gradient-text mb-1">24/7</div>
-              <div className="text-sm text-gray-500">Support</div>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="dark-card p-6 text-center"
-            >
-              <div className="text-3xl font-bold gold-gradient-text mb-1">5K+</div>
-              <div className="text-sm text-gray-500">Subscribers</div>
-            </motion.div>
+      {(communityUrl || vipUrl) && (
+        <section className="pb-12">
+          <div className="mx-auto flex max-w-5xl flex-wrap justify-center gap-4 px-4">
+            {communityUrl && <a href={communityUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-gold-500/50 px-5 py-3 text-gold-300 hover:bg-gold-500/10"><Send className="h-4 w-4" /> Join Telegram Community</a>}
+            {vipUrl && <a href={vipUrl} target="_blank" rel="noreferrer" className="gold-button inline-flex items-center gap-2"><Send className="h-4 w-4" /> Join VIP Telegram</a>}
           </div>
+        </section>
+      )}
+
+      <section className="pb-16">
+        <div className="mx-auto grid max-w-5xl gap-4 px-4 sm:grid-cols-3">
+          {["Monthly access — 30 days", "Yearly access — 365 days", "One-time payment; no automatic renewal"].map((item) => (
+            <div key={item} className="dark-card p-5 text-center text-sm text-gray-300">{item}</div>
+          ))}
         </div>
       </section>
 
@@ -167,7 +185,7 @@ export default function SignalsPage() {
                       <span className="text-4xl font-bold gold-gradient-text">
                         ${plan.price}
                       </span>
-                      <span className="text-gray-500">/{plan.metadata?.interval || "month"}</span>
+                      <span className="text-gray-500">/{Number(plan.metadata?.duration_days) === 365 ? "365 days" : "30 days"}</span>
                     </div>
 
                     {/* Features */}
@@ -195,7 +213,7 @@ export default function SignalsPage() {
                           : "border border-gold-500/50 text-gold-400 hover:bg-gold-500/10"
                       }`}
                     >
-                      <span>Subscribe Now</span>
+                      <span>View {Number(plan.metadata?.duration_days) === 365 ? "yearly" : "monthly"} access</span>
                       <ArrowRight className="w-4 h-4" />
                     </Link>
                   </div>
@@ -210,6 +228,12 @@ export default function SignalsPage() {
             </div>
           )}
         </div>
+      </section>
+
+      <section className="pb-12">
+        <p className="mx-auto max-w-4xl px-4 text-center text-xs leading-relaxed text-gray-500">
+          Trading forex, CFDs, and other financial instruments involves substantial risk and may result in loss of capital. Signals are informational, not financial advice; no profit is guaranteed. Past performance does not predict future results.
+        </p>
       </section>
 
       <Footer />

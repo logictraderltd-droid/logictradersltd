@@ -84,9 +84,8 @@ export default function AboutPage() {
               <Target className="w-16 h-16 text-gold-400 mb-6" />
               <h3 className="text-2xl font-bold mb-4">Our Vision</h3>
               <p className="text-gray-300">
-                To become the world's most trusted platform for trading education and
-                tools, helping millions of traders achieve financial independence through
-                smart, disciplined, and informed trading decisions.
+                To provide accessible trading education and tools that help people make
+                informed decisions while understanding the financial risks involved.
               </p>
             </motion.div>
           </div>
@@ -183,8 +182,8 @@ export default function AboutPage() {
               viewport={{ once: true }}
               className="text-center"
             >
-              <div className="text-4xl font-bold gold-gradient-text mb-2">10,000+</div>
-              <p className="text-gray-400">Active Traders</p>
+              <div className="text-4xl font-bold gold-gradient-text mb-2">Courses</div>
+              <p className="text-gray-400">Trading education</p>
             </motion.div>
 
             <motion.div
@@ -194,8 +193,8 @@ export default function AboutPage() {
               transition={{ delay: 0.1 }}
               className="text-center"
             >
-              <div className="text-4xl font-bold gold-gradient-text mb-2">87%</div>
-              <p className="text-gray-400">Signal Win Rate</p>
+              <div className="text-4xl font-bold gold-gradient-text mb-2">Signals</div>
+              <p className="text-gray-400">Monthly and yearly plans</p>
             </motion.div>
 
             <motion.div
@@ -205,8 +204,8 @@ export default function AboutPage() {
               transition={{ delay: 0.2 }}
               className="text-center"
             >
-              <div className="text-4xl font-bold gold-gradient-text mb-2">50+</div>
-              <p className="text-gray-400">Expert Courses</p>
+              <div className="text-4xl font-bold gold-gradient-text mb-2">Bots</div>
+              <p className="text-gray-400">Payment-verified delivery</p>
             </motion.div>
 
             <motion.div
@@ -216,8 +215,8 @@ export default function AboutPage() {
               transition={{ delay: 0.3 }}
               className="text-center"
             >
-              <div className="text-4xl font-bold gold-gradient-text mb-2">24/7</div>
-              <p className="text-gray-400">Customer Support</p>
+              <div className="text-4xl font-bold gold-gradient-text mb-2">Providers</div>
+              <p className="text-gray-400">External listings</p>
             </motion.div>
           </div>
         </div>
@@ -282,8 +281,7 @@ export default function AboutPage() {
             <Globe className="w-16 h-16 text-gold-400 mx-auto mb-6" />
             <h2 className="text-3xl font-bold mb-4">Ready to Start Trading?</h2>
             <p className="text-gray-300 mb-8">
-              Join thousands of successful traders who trust LOGICTRADERSLTD for their
-              trading journey.
+              Explore our trading education, tools, signals, and provider listings. Trading involves financial risk.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/courses" className="gold-button">

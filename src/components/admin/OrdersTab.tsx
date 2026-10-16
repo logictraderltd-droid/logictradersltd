@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, Eye, Filter, Download, ShoppingCart, Calendar, User, Package, CreditCard, X, Trash2, Loader2 } from "lucide-react";
 import { Order } from "@/types";
 import { createBrowserClient } from "@/lib/supabase";
@@ -17,6 +17,54 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+    const [deliveryRequest, setDeliveryRequest] = useState<any | null>(null);
+    const [deliveryLoading, setDeliveryLoading] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadDelivery = async () => {
+            if (!selectedOrder || selectedOrder.product_type !== 'bot' || selectedOrder.metadata?.delivery_method !== 'manual_email') {
+                setDeliveryRequest(null);
+                return;
+            }
+            setDeliveryLoading(true);
+            const { data, error } = await createBrowserClient()
+                .from('bot_delivery_requests')
+                .select('id, full_name, email, mt5_account_number, status, delivered_at')
+                .eq('order_id', selectedOrder.id)
+                .maybeSingle();
+            if (error) {
+                console.error('Unable to load bot delivery request:', error);
+            }
+            if (!cancelled) {
+                setDeliveryRequest(data || null);
+                setDeliveryLoading(false);
+            }
+        };
+        void loadDelivery();
+        return () => { cancelled = true; };
+    }, [selectedOrder]);
+
+    const markDelivered = async () => {
+        if (!selectedOrder) return;
+        setDeliveryLoading(true);
+        try {
+            const response = await fetch('/api/admin/bot-deliveries/mark-delivered', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId: selectedOrder.id }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to update delivery.');
+            setDeliveryRequest((current: any) => ({ ...current, status: 'delivered', delivered_at: new Date().toISOString() }));
+            await onRefresh();
+        } catch (error) {
+            console.error('Unable to mark bot delivered:', error);
+            alert(error instanceof Error ? error.message : 'Unable to update delivery status.');
+        } finally {
+            setDeliveryLoading(false);
+        }
+    };
 
     const filteredOrders = orders.filter(order => {
         const email = (order as any).user?.email || "";
@@ -150,7 +198,7 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
                         <div className="mt-auto pt-4 border-t border-dark-800 flex justify-between items-center">
                             <div className="flex flex-col">
                                 <span className="text-[10px] text-gray-500 uppercase font-bold">Total Amount</span>
-                                <span className="text-lg font-mono font-bold text-white">${order.amount}</span>
+                                <span className="text-lg font-mono font-bold text-white">${Number(order.amount ?? (Number((order as any).amount_cents ?? 0) / 100)).toFixed(2)}</span>
                             </div>
                             <div className="flex gap-2">
                                 <button
@@ -215,9 +263,28 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
                                 </div>
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-gray-500 block mb-1">Amount</label>
-                                    <p className="text-lg font-mono font-bold text-white">${selectedOrder.amount}</p>
+                                    <p className="text-lg font-mono font-bold text-white">${Number(selectedOrder.amount ?? (Number(selectedOrder.amount_cents ?? 0) / 100)).toFixed(2)}</p>
                                 </div>
                             </div>
+
+                            {selectedOrder.product_type === 'bot' && selectedOrder.metadata?.delivery_method === 'manual_email' && (
+                                <div className="rounded-xl border border-gold-500/20 bg-gold-500/5 p-4">
+                                    <h4 className="mb-3 font-semibold text-white">Manual bot delivery</h4>
+                                    {deliveryLoading ? <p className="text-sm text-gray-400">Loading delivery details...</p> : deliveryRequest ? (
+                                        <div className="space-y-2 text-sm">
+                                            <p>Customer: <span className="text-white">{deliveryRequest.full_name}</span></p>
+                                            <p>Email: <a className="text-gold-300 underline" href={`mailto:${deliveryRequest.email}`}>{deliveryRequest.email}</a></p>
+                                            <p>MT5 account: <span className="font-mono text-white">{deliveryRequest.mt5_account_number}</span></p>
+                                            <p>Status: <span className="capitalize text-white">{deliveryRequest.status.replace('_', ' ')}</span></p>
+                                            {selectedOrder.status === 'completed' && deliveryRequest.status === 'pending_delivery' && (
+                                                <button type="button" disabled={deliveryLoading} onClick={markDelivered} className="mt-2 rounded-lg bg-gold-500 px-4 py-2 font-semibold text-dark-950 disabled:opacity-50">
+                                                    Mark emailed and delivered
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : <p className="text-sm text-gray-400">No delivery details are available for this order.</p>}
+                                </div>
+                            )}
 
                             <div className="p-4 bg-dark-950 rounded-xl border border-dark-800">
                                 <label className="text-[10px] uppercase font-bold text-gray-500 block mb-3">Customer Information</label>
@@ -294,5 +361,3 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
         </div>
     );
 }
-
-

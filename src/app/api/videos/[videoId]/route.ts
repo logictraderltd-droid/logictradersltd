@@ -23,6 +23,14 @@ export async function GET(
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
 
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('is_active, metadata')
+      .eq('id', video.product_id)
+      .maybeSingle();
+    if (productError) throw productError;
+    const isFreeCourse = product?.is_active === true && product.metadata?.is_free === true;
+
     const { data: access, error: accessError } = await supabase
       .from('user_access')
       .select('expires_at')
@@ -31,12 +39,9 @@ export async function GET(
       .eq('is_active', true)
       .maybeSingle();
 
-    if (accessError || !access) {
+    if (accessError) throw accessError;
+    if (!isFreeCourse && (!access || (access.expires_at && new Date(access.expires_at) <= new Date()))) {
       return NextResponse.json({ error: 'Access denied. Please purchase this course first.' }, { status: 403 });
-    }
-
-    if (access.expires_at && new Date(access.expires_at) < new Date()) {
-      return NextResponse.json({ error: 'Your access to this content has expired.' }, { status: 403 });
     }
 
     if (!video.video_url) {
@@ -79,6 +84,14 @@ export async function POST(
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
 
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('is_active, metadata')
+      .eq('id', video.product_id)
+      .maybeSingle();
+    if (productError) throw productError;
+    const isFreeCourse = product?.is_active === true && product.metadata?.is_free === true;
+
     const { data: access, error: accessError } = await supabase
       .from('user_access')
       .select('expires_at')
@@ -87,7 +100,8 @@ export async function POST(
       .eq('is_active', true)
       .maybeSingle();
 
-    if (accessError || !access || (access.expires_at && new Date(access.expires_at) < new Date())) {
+    if (accessError) throw accessError;
+    if (!isFreeCourse && (!access || (access.expires_at && new Date(access.expires_at) <= new Date()))) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

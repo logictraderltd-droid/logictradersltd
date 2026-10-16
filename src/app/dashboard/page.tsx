@@ -114,14 +114,20 @@ function DashboardContent() {
 
       try {
         // Fetch user's purchased courses
-        const { data: courseAccess } = await supabase
+        const { data: accessRows, error: accessError } = await supabase
           .from("user_access")
-          .select("product_id")
+          .select("product_id, expires_at, products!inner(product_type)")
           .eq("user_id", user.id)
-          .eq("product_type", "course")
           .eq("is_active", true);
+        if (accessError) throw accessError;
 
-        const courseIds = courseAccess?.map((a) => a.product_id) || [];
+        const activeAccess = (accessRows || []).filter((access: any) =>
+          !access.expires_at || new Date(access.expires_at) > new Date()
+        );
+        const courseIds = activeAccess.filter((access: any) => {
+          const product = Array.isArray(access.products) ? access.products[0] : access.products;
+          return product?.product_type === "course";
+        }).map((access) => access.product_id);
 
         let courses: Course[] = [];
         if (courseIds.length > 0) {
@@ -131,6 +137,14 @@ function DashboardContent() {
             .in("id", courseIds);
           courses = courseData || [];
         }
+        const { data: freeCourseRows } = await supabase
+          .from("products")
+          .select("*")
+          .eq("product_type", "course")
+          .eq("is_active", true);
+        for (const freeCourse of (freeCourseRows || []).filter((course: any) => course.metadata?.is_free === true)) {
+          if (!courses.some((course) => course.id === freeCourse.id)) courses.push(freeCourse as Course);
+        }
 
         // Fetch active subscriptions
         const { data: subscriptionsData } = await supabase
@@ -138,17 +152,13 @@ function DashboardContent() {
           .select(`*, plan:products(*)`)
           .eq("user_id", user.id)
           .eq("status", "active")
-          .gte("current_period_end", new Date().toISOString());
+          .gte("ends_at", new Date().toISOString());
 
         // Fetch purchased bots
-        const { data: botAccess } = await supabase
-          .from("user_access")
-          .select("product_id")
-          .eq("user_id", user.id)
-          .eq("product_type", "bot")
-          .eq("is_active", true);
-
-        const botIds = botAccess?.map((a) => a.product_id) || [];
+        const botIds = activeAccess.filter((access: any) => {
+          const product = Array.isArray(access.products) ? access.products[0] : access.products;
+          return product?.product_type === "bot";
+        }).map((access) => access.product_id);
 
         let bots: TradingBot[] = [];
         if (botIds.length > 0) {
@@ -161,14 +171,19 @@ function DashboardContent() {
 
         // Fetch signals
         let signals: TradingSignal[] = [];
-        if (subscriptionsData && subscriptionsData.length > 0) {
+        const signalIds = activeAccess.filter((access: any) => {
+          const product = Array.isArray(access.products) ? access.products[0] : access.products;
+          return product?.product_type === "signal";
+        }).map((access) => access.product_id);
+        if (signalIds.length > 0) {
           const { data: signalsData } = await supabase
             .from("signals")
             .select("*")
             .eq("status", "active")
+            .in("plan_id", signalIds)
             .order("created_at", { ascending: false })
             .limit(5);
-          signals = signalsData || [];
+          signals = (signalsData || []).map((signal: any) => ({ ...signal, symbol: signal.pair, result: null }));
         }
 
         // Fetch history
@@ -178,13 +193,24 @@ function DashboardContent() {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(5);
+        const { data: deliveryRows } = await supabase
+          .from("bot_delivery_requests")
+          .select("order_id, status")
+          .eq("user_id", user.id);
+        const deliveryStatusByOrder = new Map((deliveryRows || []).map((row: any) => [row.order_id, row.status]));
 
         setData({
           courses,
           subscriptions: subscriptionsData || [],
           bots,
           recentSignals: signals,
-          paymentHistory: ordersData || [],
+          paymentHistory: (ordersData || []).map((order: any) => ({
+            ...order,
+            amount: Number(order.amount ?? (Number(order.amount_cents ?? 0) / 100)),
+            currency: order.currency || order.product?.currency || "USD",
+            product_type: order.product_type ?? order.product?.product_type ?? "course",
+            delivery_status: deliveryStatusByOrder.get(order.id) ?? null,
+          })),
         });
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -690,6 +716,11 @@ function DashboardContent() {
                                     {order.status === 'failed' && <XCircle className="w-3.5 h-3.5" />}
                                     <span className="capitalize">{order.status}</span>
                                   </span>
+                                  {order.delivery_status && (
+                                    <span className="mt-1 block text-xs capitalize text-gold-300">
+                                      Bot delivery: {order.delivery_status.replace('_', ' ')}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                   <button className="text-gray-500 hover:text-white transition-colors p-2 hover:bg-dark-800 rounded-lg">

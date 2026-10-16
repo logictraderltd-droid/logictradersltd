@@ -93,7 +93,7 @@ export default function CoursesPage() {
                 <Play className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
               </div>
               <div className="flex gap-2">
-                {['all', 'beginner', 'intermediate', 'advanced'].map((lvl) => (
+                {['all', 'beginner', 'intermediate', 'professional'].map((lvl) => (
                   <button
                     key={lvl}
                     onClick={() => setLevelFilter(lvl)}
@@ -185,7 +185,7 @@ export default function CoursesPage() {
                     {/* Price & CTA */}
                     <div className="flex items-center justify-between pt-4 border-t border-dark-800">
                       <div className="text-2xl font-bold gold-gradient-text">
-                        ${Number(course.price || 0).toFixed(2)}
+                        {course.metadata?.is_free ? "Free" : `$${Number(course.price || 0).toFixed(2)}`}
                       </div>
                       <Link
                         href={`/courses/${course.id}`}

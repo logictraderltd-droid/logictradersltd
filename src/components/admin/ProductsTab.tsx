@@ -56,6 +56,11 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
     const [downloadUrl, setDownloadUrl] = useState("");
     const [visitUrl, setVisitUrl] = useState("");
     const [botInstructions, setBotInstructions] = useState("");
+    const [isFreeCourse, setIsFreeCourse] = useState(false);
+    const [botDeliveryMethod, setBotDeliveryMethod] = useState<"manual_email" | "automatic_download">("automatic_download");
+    const [botType, setBotType] = useState("");
+    const [signalDurationDays, setSignalDurationDays] = useState(30);
+    const [botVideoUrl, setBotVideoUrl] = useState("");
 
     // Metadata Fields
     const [level, setLevel] = useState("beginner");
@@ -103,6 +108,11 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             setVisitUrl(product.metadata?.visit_url || "");
             setDownloadUrl((product as any).download_url || product.metadata?.download_url || "");
             setBotInstructions(product.metadata?.instructions || "");
+            setIsFreeCourse(Boolean(product.metadata?.is_free));
+            setBotDeliveryMethod(product.metadata?.delivery_method === "manual_email" ? "manual_email" : "automatic_download");
+            setBotType(product.metadata?.bot_type || "");
+            setSignalDurationDays(Number(product.metadata?.duration_days) || 30);
+            setBotVideoUrl(product.metadata?.demo_video_url || "");
 
             if (productType === 'bot') {
                 const supabase = createBrowserClient();
@@ -145,6 +155,11 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             setDownloadUrl("");
             setVisitUrl("");
             setBotInstructions("");
+            setIsFreeCourse(false);
+            setBotDeliveryMethod("automatic_download");
+            setBotType("");
+            setSignalDurationDays(30);
+            setBotVideoUrl("");
             setLevel("beginner");
             setDuration("");
             setInstructor("");
@@ -169,8 +184,14 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
 
             // Validate price
             const priceValue = parseFloat(formData.price?.toString() || "0");
-            if (isNaN(priceValue)) {
+            if (!Number.isFinite(priceValue) || priceValue < 0) {
                 throw new Error("Invalid price value");
+            }
+            if (formData.type === 'signal' && ![30, 365].includes(signalDurationDays)) {
+                throw new Error("Signal plans must grant 30 or 365 days of access.");
+            }
+            if (formData.type === 'course' && isFreeCourse && priceValue !== 0) {
+                throw new Error("Free courses must have a price of $0.");
             }
 
             // Validate thumbnail (prevent Base64)
@@ -179,8 +200,11 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             }
 
             const productType = getProductType(formData);
-            if (productType === 'bot' && !visitUrl.trim()) {
-                throw new Error("Add the bot's link URL before saving.");
+            if (productType === 'bot' && botDeliveryMethod === 'automatic_download' && !downloadUrl.trim()) {
+                throw new Error("Automatic bot delivery requires a downloadable file URL.");
+            }
+            if (productType === 'bot' && botDeliveryMethod === 'manual_email' && !visitUrl.trim() && !botInstructions.trim()) {
+                throw new Error("Manual delivery requires a delivery link or delivery instructions.");
             }
 
             // Prepare payload using the live Supabase schema.
@@ -193,6 +217,12 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 thumbnail_url: formData.thumbnail_url || null,
                 metadata: {
                     ...(editingProduct?.metadata || {}),
+                    is_free: formData.type === 'course' && isFreeCourse,
+                    level: formData.type === 'course' ? level : (editingProduct?.metadata?.level ?? level),
+                    delivery_method: formData.type === 'bot' ? botDeliveryMethod : (editingProduct?.metadata?.delivery_method ?? null),
+                    bot_type: formData.type === 'bot' ? botType.trim() : (editingProduct?.metadata?.bot_type ?? null),
+                    demo_video_url: formData.type === 'bot' ? botVideoUrl.trim() : (editingProduct?.metadata?.demo_video_url ?? null),
+                    duration_days: formData.type === 'signal' ? signalDurationDays : (editingProduct?.metadata?.duration_days ?? null),
                 }
             };
 
@@ -209,13 +239,13 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 payload.metadata.lessons = lessonsCount;
                 payload.metadata.what_you_learn = listItems;
             } else if (formData.type === 'bot') {
-                payload.metadata.visit_url = visitUrl;
-                payload.metadata.download_url = downloadUrl;
                 payload.metadata.features = listItems;
-                payload.metadata.instructions = botInstructions;
             } else if (formData.type === 'signal') {
                 payload.metadata.features = listItems;
             }
+            delete payload.metadata.visit_url;
+            delete payload.metadata.download_url;
+            delete payload.metadata.instructions;
 
             // Global metadata
             payload.metadata.students = studentsCount;
@@ -258,7 +288,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             if (productType === 'bot' && savedProductId) {
                 const botLinkPayload = {
                     product_id: savedProductId,
-                    link_url: visitUrl.trim(),
+                    link_url: visitUrl.trim() || null,
                     download_url: downloadUrl.trim() || null,
                     instructions: botInstructions.trim() || null,
                 };
@@ -274,6 +304,22 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                     ? await supabase.from('bot_links').update(botLinkPayload).eq('id', existingBotLink.id)
                     : await supabase.from('bot_links').insert(botLinkPayload);
                 if (botLinkError) throw botLinkError;
+            }
+
+            if (productType === 'signal' && savedProductId) {
+                const { data: existingPlan, error: planLookupError } = await supabase
+                    .from('signal_plans')
+                    .select('id')
+                    .eq('product_id', savedProductId)
+                    .limit(1)
+                    .maybeSingle();
+                if (planLookupError) throw planLookupError;
+
+                const planPayload = { product_id: savedProductId, duration_days: signalDurationDays };
+                const { error: planSaveError } = existingPlan
+                    ? await supabase.from('signal_plans').update(planPayload).eq('id', existingPlan.id)
+                    : await supabase.from('signal_plans').insert(planPayload);
+                if (planSaveError) throw planSaveError;
             }
 
             console.log("Submission successful");
@@ -599,6 +645,19 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                 <p className="text-sm text-gray-400 line-clamp-2 mb-4 h-10">
                                     {product.description}
                                 </p>
+                                {product.type === 'bot' && (
+                                    <p className="mb-3 text-xs font-semibold text-gold-300">
+                                        Delivery: {product.metadata?.delivery_method === 'manual_email' ? 'Manual email' : 'Automatic download'}
+                                    </p>
+                                )}
+                                {product.type === 'course' && product.metadata?.is_free === true && (
+                                    <p className="mb-3 text-xs font-semibold text-green-300">Free course — sign-in required</p>
+                                )}
+                                {product.type === 'signal' && (
+                                    <p className="mb-3 text-xs font-semibold text-blue-300">
+                                        VIP access: {Number(product.metadata?.duration_days) === 365 ? '365 days' : '30 days'}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="flex items-end justify-between pt-4 border-t border-dark-800/50 mt-2">
@@ -812,10 +871,28 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                         </h4>
 
                                         {formData.type === 'course' && (
+                                            <>
+                                            <div className="grid gap-4 md:grid-cols-2">
+                                                <label className="space-y-2 text-sm font-medium text-gray-400">
+                                                    Course level
+                                                    <select value={level} onChange={(e) => setLevel(e.target.value)} className="w-full rounded-xl border border-dark-800 bg-dark-950 px-4 py-3 text-white">
+                                                        <option value="beginner">Beginner</option>
+                                                        <option value="intermediate">Intermediate</option>
+                                                        <option value="professional">Professional</option>
+                                                    </select>
+                                                </label>
+                                                <label className="flex items-center gap-3 self-end pb-3 text-sm text-gray-300">
+                                                    <input type="checkbox" checked={isFreeCourse} onChange={(e) => {
+                                                        setIsFreeCourse(e.target.checked);
+                                                        if (e.target.checked) setFormData((current) => ({ ...current, price: 0 }));
+                                                    }} />
+                                                    Free course (signed-in users only)
+                                                </label>
+                                            </div>
                                             <div className="space-y-2">
                                                 <label className="text-sm font-medium text-gray-400 flex items-center gap-2">
                                                     <Video className="w-4 h-4 text-gold-500" />
-                                                    Video URL
+                                                    Preview video URL
                                                 </label>
                                                 <div className="flex gap-2">
                                                     <input
@@ -845,10 +922,31 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                                 </div>
                                                 <p className="text-xs text-gray-500">Provide a link to the course video or upload one.</p>
                                             </div>
+                                            </>
                                         )}
 
                                         {formData.type === 'bot' && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <label className="space-y-2 text-sm font-medium text-gray-400 md:col-span-2">
+                                                    Bot type
+                                                    <input value={botType} onChange={(e) => setBotType(e.target.value)} className="w-full rounded-xl border border-dark-800 bg-dark-950 px-4 py-3 text-white" placeholder="e.g. MT5 Expert Advisor" />
+                                                </label>
+                                                <label className="space-y-2 text-sm font-medium text-gray-400 md:col-span-2">
+                                                    Customer delivery method
+                                                    <select value={botDeliveryMethod} onChange={(e) => setBotDeliveryMethod(e.target.value as "manual_email" | "automatic_download")} className="w-full rounded-xl border border-dark-800 bg-dark-950 px-4 py-3 text-white">
+                                                        <option value="manual_email">Option A — Manual email delivery after verified payment</option>
+                                                        <option value="automatic_download">Option B — Automatic download after verified payment</option>
+                                                    </select>
+                                                </label>
+                                                <div className="space-y-2 md:col-span-2">
+                                                    <label className="text-sm font-medium text-gray-400">Bot demonstration video URL</label>
+                                                    <div className="flex gap-2">
+                                                        <input type="url" value={botVideoUrl} onChange={(e) => setBotVideoUrl(e.target.value)} className="flex-1 rounded-xl border border-dark-800 bg-dark-950 px-4 py-3 text-white" placeholder="https://" />
+                                                        <CldUploadWidget uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"} options={{ resourceType: "video" }} onSuccess={(result: any) => { if (result.info?.secure_url) setBotVideoUrl(result.info.secure_url); }}>
+                                                            {({ open }) => <button type="button" onClick={() => open()} className="flex items-center gap-2 rounded-xl border border-dark-700 bg-dark-800 px-4 py-2 text-gray-300"><Upload className="h-4 w-4" /> Upload</button>}
+                                                        </CldUploadWidget>
+                                                    </div>
+                                                </div>
                                                 <div className="space-y-2">
                                                     <label className="text-sm font-medium text-gray-400 flex items-center gap-2">
                                                         <DownloadIcon className="w-4 h-4 text-gold-500" />
@@ -884,11 +982,10 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                                 <div className="space-y-2">
                                                     <label className="text-sm font-medium text-gray-400 flex items-center gap-2">
                                                         <LinkIcon className="w-4 h-4 text-gold-500" />
-                                                        Bot Link URL <span className="text-red-500">*</span>
+                                                        {botDeliveryMethod === "manual_email" ? "Manual delivery link (private)" : "Optional bot information link"}
                                                     </label>
                                                     <input
                                                         type="url"
-                                                        required
                                                         value={visitUrl}
                                                         onChange={(e) => setVisitUrl(e.target.value)}
                                                         className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors"
@@ -896,13 +993,13 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                                     />
                                                 </div>
                                                 <div className="space-y-2 md:col-span-2">
-                                                    <label className="text-sm font-medium text-gray-400">Bot Instructions (optional)</label>
+                                                    <label className="text-sm font-medium text-gray-400">{botDeliveryMethod === "manual_email" ? "Manual delivery instructions / email details" : "Bot setup instructions (optional)"}</label>
                                                     <textarea
                                                         rows={3}
                                                         value={botInstructions}
                                                         onChange={(e) => setBotInstructions(e.target.value)}
                                                         className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors resize-none"
-                                                        placeholder="Installation or setup instructions"
+                                                        placeholder={botDeliveryMethod === "manual_email" ? "Instructions for the admin to deliver after payment is verified" : "Installation or setup instructions"}
                                                     />
                                                 </div>
                                             </div>
@@ -945,6 +1042,15 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                                     className="w-full bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors font-mono"
                                                 />
                                             </div>
+                                        )}
+                                        {formData.type === 'signal' && (
+                                            <label className="space-y-2 text-sm font-medium text-gray-400">
+                                                VIP access duration
+                                                <select value={signalDurationDays} onChange={(e) => setSignalDurationDays(Number(e.target.value))} className="w-full rounded-xl border border-dark-800 bg-dark-950 px-4 py-3 text-white">
+                                                    <option value={30}>Monthly (30 days)</option>
+                                                    <option value={365}>Yearly (365 days)</option>
+                                                </select>
+                                            </label>
                                         )}
                                     </div>
                                 </div>
@@ -1029,7 +1135,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                     <h4 className="text-sm uppercase tracking-wider text-gray-500 font-semibold border-b border-dark-800 pb-2">Pricing & Visibility</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-gray-400">{formData.type === 'course' ? 'Price per video course' : 'Price'} <span className="text-red-500">*</span></label>
+                                            <label className="text-sm font-medium text-gray-400">                                            {formData.type === 'course' && isFreeCourse ? 'Free course' : formData.type === 'signal' ? (signalDurationDays === 365 ? 'Yearly VIP price' : 'Monthly VIP price') : formData.type === 'course' ? 'Price per video course' : 'Price'} <span className="text-red-500">*</span></label>
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                                                 <input
@@ -1037,6 +1143,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                                     step="0.01"
                                                     required
                                                     min="0"
+                                                    disabled={formData.type === 'course' && isFreeCourse}
                                                     value={formData.price}
                                                     onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
                                                     className="w-full bg-dark-950 border border-dark-800 rounded-xl pl-8 pr-4 py-3 text-white focus:outline-none focus:border-gold-500/50 transition-colors font-mono"

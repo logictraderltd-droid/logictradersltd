@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Bell, Trash2, X, AlertTriangle, Target, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import { TradingSignal, Product } from "@/types";
 import { createBrowserClient } from "@/lib/supabase";
@@ -11,6 +11,7 @@ interface SignalsTabProps {
 }
 
 export function SignalsTab({ signals, onRefresh }: SignalsTabProps) {
+    const [signalPlans, setSignalPlans] = useState<Array<{ id: string; name: string; duration_days: number }>>([]);
     const [isCreating, setIsCreating] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [editingSignal, setEditingSignal] = useState<TradingSignal | null>(null);
@@ -19,6 +20,7 @@ export function SignalsTab({ signals, onRefresh }: SignalsTabProps) {
 
     const [formData, setFormData] = useState({
         title: '',
+        plan_id: '',
         pair: '',
         direction: 'buy',
         entry_price: '',
@@ -30,9 +32,32 @@ export function SignalsTab({ signals, onRefresh }: SignalsTabProps) {
         status: 'active'
     });
 
+    useEffect(() => {
+        const loadPlans = async () => {
+            const supabase = createBrowserClient();
+            const { data, error } = await supabase
+                .from('signal_plans')
+                .select('product_id, duration_days, products!inner(name, is_active)')
+                .eq('products.is_active', true);
+            if (error) {
+                console.error('Unable to load VIP signal plans:', error);
+                return;
+            }
+            setSignalPlans((data || []).map((plan: any) => {
+                const product = Array.isArray(plan.products) ? plan.products[0] : plan.products;
+                return { id: plan.product_id, name: product?.name || 'Signal plan', duration_days: plan.duration_days };
+            }));
+            if (data?.[0]) {
+                setFormData((current) => current.plan_id ? current : { ...current, plan_id: data[0].product_id });
+            }
+        };
+        void loadPlans();
+    }, []);
+
     const handleOpenCreate = () => {
         setFormData({
             title: '',
+            plan_id: signalPlans[0]?.id || '',
             pair: '',
             direction: 'buy',
             entry_price: '',
@@ -50,6 +75,7 @@ export function SignalsTab({ signals, onRefresh }: SignalsTabProps) {
     const handleOpenEdit = (signal: TradingSignal) => {
         setFormData({
             title: signal.title,
+            plan_id: signal.plan_id || signalPlans[0]?.id || '',
             pair: signal.pair,
             direction: signal.direction,
             entry_price: signal.entry_price?.toString() || '',
@@ -67,8 +93,8 @@ export function SignalsTab({ signals, onRefresh }: SignalsTabProps) {
     const handleCreateOrUpdateSignal = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!formData.title.trim() || !formData.pair.trim()) {
-            alert("Please enter a signal title and pair");
+        if (!formData.title.trim() || !formData.pair.trim() || !formData.plan_id) {
+            alert("Please enter a signal title, pair, and VIP signal plan");
             return;
         }
 
@@ -83,6 +109,7 @@ export function SignalsTab({ signals, onRefresh }: SignalsTabProps) {
         try {
             const payload = {
                 title: formData.title.trim(),
+                plan_id: formData.plan_id,
                 pair: formData.pair.trim().toUpperCase(),
                 direction: formData.direction,
                 entry_price: formData.entry_price ? Number(formData.entry_price) : null,
@@ -261,6 +288,19 @@ export function SignalsTab({ signals, onRefresh }: SignalsTabProps) {
                                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                     required
                                 />
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-sm font-medium text-gray-400">VIP Plan <span className="text-gold-500">*</span></label>
+                                <select
+                                    value={formData.plan_id}
+                                    onChange={(event) => setFormData({ ...formData, plan_id: event.target.value })}
+                                    className="w-full rounded-xl border border-dark-800 bg-dark-950 px-4 py-3 text-white"
+                                    required
+                                >
+                                    <option value="">Select a plan</option>
+                                    {signalPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} — {plan.duration_days} days</option>)}
+                                </select>
+                                {signalPlans.length === 0 && <p className="text-xs text-amber-400">Create an active VIP signal product before posting signals.</p>}
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-400">Pair / Symbol <span className="text-gold-500">*</span></label>

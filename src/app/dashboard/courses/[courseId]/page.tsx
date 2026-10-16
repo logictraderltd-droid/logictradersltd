@@ -44,22 +44,7 @@ export default function CourseViewerPage() {
 
                 if (!params.courseId) return;
 
-                // 1. Check Access
-                const { data: access } = await supabase
-                    .from('user_access')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .eq('product_id', params.courseId)
-                    .eq('is_active', true)
-                    .maybeSingle();
-
-                if (!access && !authIsAdmin) {
-                    setError("You don't have access to this course. Please purchase it to continue.");
-                    setIsLoading(false);
-                    return;
-                }
-
-                // 2. Fetch course details
+                // 1. Fetch course details before applying the free/paid access rule.
                 const { data, error } = await supabase
                     .from('products')
                     .select('*')
@@ -68,6 +53,22 @@ export default function CourseViewerPage() {
 
                 if (error) throw error;
                 if (!data) throw new Error('Course not found');
+
+                const isFreeCourse = data.is_active === true && data.metadata?.is_free === true;
+                const { data: access, error: accessError } = await supabase
+                    .from('user_access')
+                    .select('expires_at')
+                    .eq('user_id', user.id)
+                    .eq('product_id', params.courseId)
+                    .eq('is_active', true)
+                    .maybeSingle();
+                if (accessError) throw accessError;
+                const hasPaidAccess = !!access && (!access.expires_at || new Date(access.expires_at) > new Date());
+                if (!isFreeCourse && !hasPaidAccess && !authIsAdmin) {
+                    setError("You don't have access to this course. Please purchase it to continue.");
+                    setIsLoading(false);
+                    return;
+                }
 
                 setCourse(data as Course);
 

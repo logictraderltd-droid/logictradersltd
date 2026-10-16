@@ -51,6 +51,10 @@ export default function Home() {
         <WhyChooseUs />
       </motion.div>
 
+      <p className="mx-auto max-w-5xl px-4 pb-8 text-center text-xs leading-relaxed text-gray-500">
+        Trading forex, CFDs, and other financial instruments involves substantial risk and may result in loss of capital. Nothing on this site is financial advice or a guarantee of results. Past performance does not predict future results.
+      </p>
+
       <Footer />
     </main>
   );

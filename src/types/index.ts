@@ -44,7 +44,7 @@ export interface Product {
 export interface Course extends Product {
   type: 'course';
   duration?: string;
-  level?: 'beginner' | 'intermediate' | 'advanced';
+  level?: 'beginner' | 'intermediate' | 'professional';
   lessons?: CourseLesson[];
 }
 
@@ -70,6 +70,7 @@ export interface SignalPlan extends Product {
 
 export interface TradingSignal {
   id: string;
+  plan_id?: string | null;
   title: string;
   pair: string;
   direction: string;
@@ -100,7 +101,10 @@ export interface Order {
   product_id: string;
   product_type: ProductType;
   amount: number;
+  amount_cents?: number;
   currency: string;
+  metadata?: Record<string, any>;
+  delivery_status?: string | null;
   status: 'pending' | 'completed' | 'failed' | 'refunded';
   payment_method?: string;
   created_at: string;
@@ -126,11 +130,15 @@ export interface Payment {
 export interface Subscription {
   id: string;
   user_id: string;
-  plan_id: string;
+  product_id: string;
+  plan_id?: string;
   status: 'active' | 'cancelled' | 'expired';
-  current_period_start: string;
-  current_period_end: string;
-  cancel_at_period_end: boolean;
+  starts_at: string;
+  ends_at: string;
+  stripe_subscription_id?: string | null;
+  current_period_start?: string;
+  current_period_end?: string;
+  cancel_at_period_end?: boolean;
   created_at: string;
   updated_at: string;
   plan?: SignalPlan;

@@ -44,6 +44,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
   const [isLoading, setIsLoading] = useState(true);
   const [downloadToken, setDownloadToken] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [deliveryStatus, setDeliveryStatus] = useState<string | null>(null);
 
   useEffect(() => {
     fetchBotData();
@@ -66,6 +67,20 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
         type: productData.product_type ?? "bot",
         price: Number(productData.price ?? (Number(productData.price_cents ?? 0) / 100)),
       } : null);
+      if (productData?.metadata?.delivery_method === 'manual_email' && user) {
+        const { data: delivery, error: deliveryError } = await supabase
+          .from('bot_delivery_requests')
+          .select('status')
+          .eq('user_id', user.id)
+          .eq('product_id', params.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (deliveryError) throw deliveryError;
+        setDeliveryStatus(delivery?.status ?? null);
+      } else {
+        setDeliveryStatus(null);
+      }
 
       // Check if user has access
       let canViewBotLink = isAdmin;
@@ -188,7 +203,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
             {/* Bot Info */}
             <div>
               <div className="inline-flex items-center px-3 py-1 rounded-full bg-gold-500/20 text-gold-400 text-sm mb-4">
-                Trading Bot
+                {product.metadata?.bot_type || "Trading Bot"}
               </div>
 
               <h1 className="text-4xl font-bold mb-4 gold-gradient-text">
@@ -196,12 +211,17 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
               </h1>
 
               <p className="text-gray-300 text-lg mb-6">{product.description}</p>
+              {product.metadata?.demo_video_url && (
+                <a href={product.metadata.demo_video_url} target="_blank" rel="noreferrer" className="mb-6 inline-flex text-gold-300 underline">
+                  Watch bot demonstration
+                </a>
+              )}
 
               {/* Key Features */}
               <div className="grid grid-cols-2 gap-4 mb-8">
                 <div className="flex items-center text-gray-300">
                   <Zap className="w-5 h-5 mr-2 text-gold-400" />
-                  <span>Automated Trading</span>
+                  <span>{product.metadata?.bot_type || "Trading Bot"}</span>
                 </div>
                 <div className="flex items-center text-gray-300">
                   <Shield className="w-5 h-5 mr-2 text-gold-400" />
@@ -209,7 +229,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                 </div>
                 <div className="flex items-center text-gray-300">
                   <TrendingUp className="w-5 h-5 mr-2 text-gold-400" />
-                  <span>24/7 Operation</span>
+                  <span>Payment-verified delivery</span>
                 </div>
                 <div className="flex items-center text-gray-300">
                   <Settings className="w-5 h-5 mr-2 text-gold-400" />
@@ -222,7 +242,12 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                 <div className="text-3xl font-bold gold-gradient-text">
                   ${product.price}
                 </div>
-                {hasAccess ? (
+                {product.metadata?.delivery_method === 'manual_email' &&
+                (deliveryStatus === 'pending_delivery' || deliveryStatus === 'delivered') ? (
+                  <span className="rounded-lg border border-gold-500/30 px-4 py-3 text-sm text-gold-300">
+                    Delivery: {deliveryStatus.replace('_', ' ')}
+                  </span>
+                ) : hasAccess ? (
                   <button
                     onClick={handleDownload}
                     disabled={isDownloading}
@@ -239,6 +264,11 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                 )}
               </div>
             </div>
+            {product.metadata?.delivery_method === 'manual_email' && (
+              <p className="mt-6 text-sm text-gray-400">
+                This bot is delivered manually by email after Stripe confirms your payment. You will provide your full name, email, and MT5 account number at checkout.
+              </p>
+            )}
 
             {/* Bot Image/Preview */}
             <div className="relative">
@@ -277,18 +307,18 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                   <div className="flex items-start">
                     <Zap className="w-6 h-6 text-gold-400 mr-4 flex-shrink-0 mt-1" />
                     <div>
-                      <h3 className="font-bold mb-2">Fully Automated</h3>
+                      <h3 className="font-bold mb-2">Product Information</h3>
                       <p className="text-gray-400">
-                        Let the bot trade for you 24/7 without manual intervention.
+                        Review the product description, delivery method, and setup requirements before purchase.
                       </p>
                     </div>
                   </div>
                   <div className="flex items-start">
                     <Shield className="w-6 h-6 text-gold-400 mr-4 flex-shrink-0 mt-1" />
                     <div>
-                      <h3 className="font-bold mb-2">Built-in Risk Management</h3>
+                      <h3 className="font-bold mb-2">Trading Risk</h3>
                       <p className="text-gray-400">
-                        Protect your capital with automatic stop-loss and position sizing.
+                        Automated trading can lose money. No strategy or bot guarantees a profit.
                       </p>
                     </div>
                   </div>
@@ -304,9 +334,9 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                   <div className="flex items-start">
                     <TrendingUp className="w-6 h-6 text-gold-400 mr-4 flex-shrink-0 mt-1" />
                     <div>
-                      <h3 className="font-bold mb-2">Proven Strategy</h3>
+                      <h3 className="font-bold mb-2">Monitor Your Trading</h3>
                       <p className="text-gray-400">
-                        Based on tested trading algorithms with consistent performance.
+                        Automated tools do not remove market risk. Review settings and monitor your account.
                       </p>
                     </div>
                   </div>
@@ -371,7 +401,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                   <div className="space-y-4">
                     <div>
                       <p className="text-sm text-gray-500 mb-1">Platform</p>
-                      <p className="font-medium">MT4/MT5</p>
+                      <p className="font-medium">{product.metadata?.bot_type || "As described for this product"}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500 mb-1">License</p>
@@ -381,7 +411,12 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                 </div>
 
                 <div className="border-t border-dark-800 pt-6">
-                  {!hasAccess ? (
+                  {product.metadata?.delivery_method === 'manual_email' &&
+                  (deliveryStatus === 'pending_delivery' || deliveryStatus === 'delivered') ? (
+                    <div className="rounded-lg border border-gold-500/30 bg-gold-500/5 p-4 text-sm text-gold-300">
+                      Manual email delivery: {deliveryStatus.replace('_', ' ')}
+                    </div>
+                  ) : !hasAccess ? (
                     <>
                       <div className="text-3xl font-bold gold-gradient-text mb-4">
                         ${product.price}
@@ -393,15 +428,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                       <div className="space-y-2 text-sm text-gray-400">
                         <div className="flex items-center">
                           <Check className="w-4 h-4 mr-2 text-green-400" />
-                          <span>Instant download</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Check className="w-4 h-4 mr-2 text-green-400" />
-                          <span>Lifetime updates</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Check className="w-4 h-4 mr-2 text-green-400" />
-                          <span>24/7 support</span>
+                          <span>{product.metadata?.delivery_method === "manual_email" ? "Manual email delivery after verified payment" : "Automatic download after verified payment"}</span>
                         </div>
                       </div>
                     </>

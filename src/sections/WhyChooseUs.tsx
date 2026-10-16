@@ -6,23 +6,23 @@ import { Target, Shield, TrendingUp, Users, Award, Clock } from "lucide-react";
 const features = [
   {
     icon: Target,
-    title: "High Accuracy",
-    description: "Our signals and strategies are backed by rigorous backtesting and real-market performance data.",
+    title: "Clear Signal Details",
+    description: "Review published entry, stop-loss, and take-profit information before making independent decisions.",
   },
   {
     icon: Shield,
     title: "Risk Management",
-    description: "Learn professional risk management techniques to protect your capital and maximize returns.",
+    description: "Explore educational material about risk controls. Trading still involves a risk of loss.",
   },
   {
     icon: TrendingUp,
-    title: "Proven Strategies",
-    description: "Access battle-tested trading strategies developed by industry professionals with years of experience.",
+    title: "Trading Tools",
+    description: "Compare the listed tools and services, and review their features and requirements.",
   },
   {
     icon: Users,
     title: "Expert Support",
-    description: "Get 24/7 support from our team of trading experts who are dedicated to your success.",
+    description: "Find platform information and community resources to support your learning.",
   },
   {
     icon: Award,
@@ -119,20 +119,20 @@ export default function WhyChooseUs() {
           className="mt-12 sm:mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8"
         >
           <div className="text-center">
-            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">10K+</div>
-            <div className="text-xs sm:text-sm text-gray-500">Active Members</div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">Courses</div>
+            <div className="text-xs sm:text-sm text-gray-500">Beginner to professional</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">95%</div>
-            <div className="text-xs sm:text-sm text-gray-500">Signal Accuracy</div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">Signals</div>
+            <div className="text-xs sm:text-sm text-gray-500">One-time VIP plans</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">50+</div>
-            <div className="text-xs sm:text-sm text-gray-500">Countries Served</div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">Bots</div>
+            <div className="text-xs sm:text-sm text-gray-500">Digital trading tools</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">4.9</div>
-            <div className="text-xs sm:text-sm text-gray-500">User Rating</div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gold-gradient-text mb-2">Providers</div>
+            <div className="text-xs sm:text-sm text-gray-500">External listings</div>
           </div>
         </motion.div>
       </div>

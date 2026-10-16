@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, CreditCard, Lock, Check, Loader2 } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase";
+import { createBrowserClient, normalizeProductRow } from "@/lib/supabase";
 import { Product } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
@@ -23,6 +23,13 @@ function CheckoutContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"stripe" | "mtn">("stripe");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [mt5AccountNumber, setMt5AccountNumber] = useState("");
+
+  useEffect(() => {
+    if (user?.email) setEmail(user.email);
+  }, [user?.email]);
 
   console.log("Stripe Key Loaded:", process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ? (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.substring(0, 8) + "...") : "Not found");
 
@@ -46,7 +53,7 @@ function CheckoutContent() {
         return;
       }
 
-      setProduct(data);
+      setProduct(normalizeProductRow(data));
       setIsLoading(false);
     };
 
@@ -54,8 +61,21 @@ function CheckoutContent() {
   }, [productId, router]);
 
   const handleCheckout = async () => {
+    if (product?.type === "course" && product.metadata?.is_free === true) {
+      if (!isAuthenticated) {
+        router.push(`/login?redirect=/courses/${product.id}`);
+      } else {
+        router.push(`/dashboard/courses/${product.id}`);
+      }
+      return;
+    }
     if (!isAuthenticated) {
       router.push(`/login?redirect=/checkout?product=${productId}`);
+      return;
+    }
+    if (product?.type === "bot" && product.metadata?.delivery_method === "manual_email" &&
+        (fullName.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || mt5AccountNumber.trim().length < 3)) {
+      alert("Enter your full name, valid delivery email, and MT5 account number.");
       return;
     }
 
@@ -69,6 +89,9 @@ function CheckoutContent() {
         },
         body: JSON.stringify({
           productId: product?.id,
+          fullName,
+          email,
+          mt5AccountNumber,
         }),
       });
 
@@ -159,7 +182,7 @@ function CheckoutContent() {
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Subtotal</span>
-                    <span>${product.price}</span>
+                    <span>{product.metadata?.is_free === true ? "Free" : `$${product.price}`}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Tax</span>
@@ -170,7 +193,7 @@ function CheckoutContent() {
                 <div className="flex justify-between items-center pt-4 border-t border-dark-800">
                   <span className="font-bold">Total</span>
                   <span className="text-2xl font-bold gold-gradient-text">
-                    ${product.price}
+                    {product.metadata?.is_free === true ? "Free" : `$${product.price}`}
                   </span>
                 </div>
               </div>
@@ -201,6 +224,9 @@ function CheckoutContent() {
               <div className="dark-card p-6">
                 <h2 className="text-xl font-bold mb-6">Payment Method</h2>
 
+                {product.type === "course" && product.metadata?.is_free === true ? (
+                  <p className="mb-6 rounded-lg bg-dark-800/50 p-4 text-sm text-gray-300">This course is free for signed-in users. No payment is required.</p>
+                ) : <>
                 {/* Payment Options */}
                 <div className="space-y-3 mb-6">
                   <button
@@ -255,6 +281,22 @@ function CheckoutContent() {
                   </div>
                 )}
 
+                {product.type === "bot" && product.metadata?.delivery_method === "manual_email" && (
+                  <div className="mb-6 space-y-4 rounded-lg border border-dark-700 bg-dark-800/40 p-4">
+                    <h3 className="font-semibold text-white">Bot delivery details</h3>
+                    <p className="text-sm text-gray-400">After Stripe confirms payment, our team will email the bot to you. Enter the email and MT5 account details for delivery.</p>
+                    <label className="block space-y-1 text-sm text-gray-400">Full name
+                      <input required value={fullName} onChange={(event) => setFullName(event.target.value)} className="dark-input w-full" autoComplete="name" />
+                    </label>
+                    <label className="block space-y-1 text-sm text-gray-400">Delivery email
+                      <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="dark-input w-full" autoComplete="email" />
+                    </label>
+                    <label className="block space-y-1 text-sm text-gray-400">MT5 account number
+                      <input required value={mt5AccountNumber} onChange={(event) => setMt5AccountNumber(event.target.value)} className="dark-input w-full" autoComplete="off" />
+                    </label>
+                  </div>
+                )}
+
                 {paymentMethod === "mtn" && (
                   <div className="p-4 rounded-lg bg-dark-800/50 mb-6">
                     <p className="text-sm text-gray-400">
@@ -262,6 +304,7 @@ function CheckoutContent() {
                     </p>
                   </div>
                 )}
+                </>}
 
                 {/* Checkout Button */}
                 <button
@@ -276,8 +319,8 @@ function CheckoutContent() {
                     </>
                   ) : (
                     <>
-                      <span>Complete Purchase</span>
-                      <span className="font-normal">- ${product.price}</span>
+                      <span>{product.type === "course" && product.metadata?.is_free === true ? "Access free course" : "Complete Purchase"}</span>
+                      {product.metadata?.is_free !== true && <span className="font-normal">- ${product.price}</span>}
                     </>
                   )}
                 </button>

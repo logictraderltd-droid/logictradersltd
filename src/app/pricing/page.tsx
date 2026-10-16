@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Award, FileBadge2, Image as ImageIcon, Video, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import PlatformListings from "@/components/PlatformListings";
 
 const STORAGE_KEY = "logictradersltd_pro_firm_content";
 
@@ -137,6 +138,13 @@ export default function PricingPage() {
           </div>
         </div>
       </section>
+
+      <PlatformListings
+        contentKey="pro_firm_listings"
+        title="Prop Trading Firms"
+        description="Compare firm information and explore firm-specific resources and links."
+        emptyMessage="Firm listings will appear here when published."
+      />
 
       <section className="pb-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">

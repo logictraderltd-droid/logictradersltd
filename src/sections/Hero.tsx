@@ -265,8 +265,8 @@ export default function Hero() {
               transition={{ duration: 0.5, delay: 0.4 }}
               className="text-sm sm:text-base lg:text-lg text-gray-400 mb-6 sm:mb-8 max-w-[30rem] mx-auto lg:mx-0 leading-relaxed"
             >
-              Unlock professional trading education, real-time signals, and powerful automation tools.
-              Join thousands of successful traders who trust LOGICTRADERSLTD.
+              Explore trading education, VIP signal plans, and digital trading tools.
+              Trading involves financial risk, and no outcome is guaranteed.
             </motion.p>
 
             {/* CTA Buttons */}
@@ -300,16 +300,16 @@ export default function Hero() {
               className="mt-10 sm:mt-12 grid grid-cols-3 gap-3 sm:gap-6"
             >
               <div className="text-center lg:text-left">
-                <div className="text-2xl sm:text-3xl font-bold gold-gradient-text">10K+</div>
-                <div className="text-sm text-gray-500">Active Traders</div>
+                <div className="text-2xl sm:text-3xl font-bold gold-gradient-text">Courses</div>
+                <div className="text-sm text-gray-500">Trading education</div>
               </div>
               <div className="text-center lg:text-left">
-                <div className="text-2xl sm:text-3xl font-bold gold-gradient-text">95%</div>
-                <div className="text-sm text-gray-500">Success Rate</div>
+                <div className="text-2xl sm:text-3xl font-bold gold-gradient-text">Signals</div>
+                <div className="text-sm text-gray-500">Monthly and yearly plans</div>
               </div>
               <div className="text-center lg:text-left">
-                <div className="text-2xl sm:text-3xl font-bold gold-gradient-text">24/7</div>
-                <div className="text-sm text-gray-500">Support</div>
+                <div className="text-2xl sm:text-3xl font-bold gold-gradient-text">Bots</div>
+                <div className="text-sm text-gray-500">Payment-verified delivery</div>
               </div>
             </motion.div>
           </motion.div>

@@ -11,6 +11,7 @@ import {
     X,
     Award,
     Megaphone,
+    PanelsTopLeft,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -31,6 +32,7 @@ const menuItems = [
     { id: "signals", label: "Signals", icon: Bell },
     { id: "marketing", label: "Marketing", icon: Megaphone },
     { id: "pro-firm", label: "Pro Firm", icon: Award },
+    { id: "content", label: "Platform Content", icon: PanelsTopLeft },
     { id: "settings", label: "Settings", icon: Settings },
 ];
 

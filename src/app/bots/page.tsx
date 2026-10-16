@@ -73,7 +73,7 @@ export default function BotsPage() {
             </h1>
             <p className="text-gray-400 max-w-2xl mx-auto">
               Automate your trading with our professional-grade bots. Trade 24/7 without emotions
-              and maximize your profits.
+              and evaluate the available features before deciding whether a tool is appropriate for you.
             </p>
 
             {/* Search Bar */}

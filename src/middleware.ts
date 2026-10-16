@@ -29,6 +29,8 @@ const PUBLIC_ROUTES = [
   '/courses',
   '/signals',
   '/bots',
+  '/cfd-blocker',
+  '/copy-trading',
   '/pricing',
   '/about',
   '/contact',

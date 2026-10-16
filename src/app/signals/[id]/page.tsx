@@ -21,6 +21,7 @@ import { createBrowserClient } from "@/lib/supabase";
 interface SignalPlan {
   id: string;
   product_id: string;
+  duration_days: number;
   interval: string;
   features: string[];
   max_signals_per_day: number;
@@ -55,6 +56,7 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
   const [signalPlan, setSignalPlan] = useState<SignalPlan | null>(null);
   const [recentSignals, setRecentSignals] = useState<Signal[]>([]);
   const [hasAccess, setHasAccess] = useState(false);
+  const [accessExpiresAt, setAccessExpiresAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -73,43 +75,62 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
         .single();
 
       if (productError) throw productError;
-      setProduct(productData ? { ...productData, type: productData.product_type ?? productData.type ?? "signal" } : null);
+      setProduct(productData ? {
+        ...productData,
+        type: productData.product_type ?? productData.type ?? "signal",
+        price: Number(productData.price ?? (Number(productData.price_cents ?? 0) / 100)),
+      } : null);
 
       // Fetch signal plan details
       const { data: planData, error: planError } = await supabase
         .from("signal_plans")
-        .select("*")
+        .select("id, product_id, duration_days")
         .eq("product_id", params.id)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (planError) throw planError;
-      setSignalPlan(planData);
+      if (!planData) throw new Error("Signal plan duration is not configured.");
+      setSignalPlan({
+        ...planData,
+        interval: planData.duration_days === 365 ? "year" : "month",
+        features: Array.isArray(productData.metadata?.features) ? productData.metadata.features : [],
+        max_signals_per_day: Number(productData.metadata?.max_signals_per_day ?? 0),
+      });
 
       // Fetch recent signals (preview - last 3)
-      const { data: signalsData } = await supabase
+      const { data: signalsData, error: signalsError } = await supabase
         .from("signals")
         .select("*")
         .eq("plan_id", params.id)
         .order("created_at", { ascending: false })
         .limit(3);
 
-      setRecentSignals(signalsData || []);
+      if (signalsError) throw signalsError;
+      setRecentSignals((signalsData || []).map((signal: any) => ({
+        ...signal,
+        symbol: signal.pair,
+        take_profit: signal.take_profit_1,
+        result: null,
+      })));
 
       // Check if user has active subscription
       if (user) {
         const { data: accessData } = await supabase
           .from("user_access")
-          .select("*")
+          .select("expires_at, is_active")
           .eq("user_id", user.id)
           .eq("product_id", params.id)
           .eq("is_active", true)
-          .single();
+          .maybeSingle();
 
         if (accessData) {
+          setAccessExpiresAt(accessData.expires_at);
           // Check if subscription hasn't expired
           if (
-            !accessData.expires_at ||
+            accessData.is_active !== false && (!accessData.expires_at ||
             new Date(accessData.expires_at) > new Date()
+            )
           ) {
             setHasAccess(true);
           }
@@ -151,8 +172,8 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
     );
   }
 
-  const planName = signalPlan.interval.charAt(0).toUpperCase() + signalPlan.interval.slice(1);
-  const duration = signalPlan.interval === "weekly" ? "7 days" : "30 days";
+  const planName = signalPlan.duration_days === 365 ? "Yearly" : "Monthly";
+  const duration = `${signalPlan.duration_days} days`;
 
   return (
     <div className="min-h-screen bg-dark-950">
@@ -180,6 +201,12 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
               </h1>
 
               <p className="text-gray-300 text-lg mb-6">{product.description}</p>
+              {accessExpiresAt && (
+                <p className="mb-6 text-sm text-gray-400">
+                  {new Date(accessExpiresAt) > new Date() ? "Access expires" : "Access expired"}:{" "}
+                  {new Date(accessExpiresAt).toLocaleDateString()}
+                </p>
+              )}
 
               <div className="flex items-center space-x-6 text-gray-400 mb-8">
                 <div className="flex items-center">
@@ -188,7 +215,7 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                 </div>
                 <div className="flex items-center">
                   <TrendingUp className="w-5 h-5 mr-2 text-gold-400" />
-                  <span>Up to {signalPlan.max_signals_per_day} signals/day</span>
+                  <span>{signalPlan.max_signals_per_day > 0 ? `Up to ${signalPlan.max_signals_per_day} signals/day` : "Signal updates as published"}</span>
                 </div>
               </div>
 
@@ -198,7 +225,7 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                   <div className="text-3xl font-bold gold-gradient-text">
                     ${product.price}
                   </div>
-                  <p className="text-sm text-gray-500">per {signalPlan.interval}</p>
+                  <p className="text-sm text-gray-500">one-time payment for {signalPlan.duration_days} days</p>
                 </div>
                 {hasAccess ? (
                   <Link href="/dashboard?tab=signals" className="gold-button flex items-center">
@@ -208,33 +235,17 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                 ) : (
                   <button onClick={handleSubscribe} className="gold-button flex items-center">
                     <ShoppingCart className="w-5 h-5 mr-2" />
-                    Subscribe Now
+                    Buy {signalPlan.duration_days}-day access
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Stats Card */}
             <div className="dark-card p-8">
-              <h3 className="text-xl font-bold mb-6">Performance Stats</h3>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <div className="text-3xl font-bold text-green-400 mb-2">87%</div>
-                  <p className="text-sm text-gray-400">Win Rate</p>
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-gold-400 mb-2">2.3:1</div>
-                  <p className="text-sm text-gray-400">Risk/Reward</p>
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-blue-400 mb-2">1,234</div>
-                  <p className="text-sm text-gray-400">Total Signals</p>
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-purple-400 mb-2">567</div>
-                  <p className="text-sm text-gray-400">Active Users</p>
-                </div>
-              </div>
+              <h3 className="text-xl font-bold mb-4">Risk disclosure</h3>
+              <p className="text-sm leading-relaxed text-gray-400">
+                Trading involves substantial risk and may result in loss of capital. Signals are informational, not financial advice, and do not guarantee profits. Past performance does not predict future results.
+              </p>
             </div>
           </div>
         </div>
@@ -336,7 +347,7 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                           Subscribe to view all signals in real-time
                         </p>
                         <button onClick={handleSubscribe} className="gold-button">
-                          Subscribe Now
+                          Buy {signalPlan.duration_days}-day access
                         </button>
                       </div>
                     )}
@@ -365,7 +376,7 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                     <div>
                       <h3 className="font-bold mb-2">Subscribe to the Plan</h3>
                       <p className="text-gray-400">
-                        Choose your preferred plan ({signalPlan.interval}) and complete the
+                        Choose one-time access for {signalPlan.duration_days} days and complete the
                         payment securely.
                       </p>
                     </div>
@@ -377,7 +388,7 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                     <div>
                       <h3 className="font-bold mb-2">Get Instant Access</h3>
                       <p className="text-gray-400">
-                        Access your dashboard immediately and start receiving trading
+                        After payment is verified, access your dashboard and receive
                         signals.
                       </p>
                     </div>
@@ -399,9 +410,9 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                       4
                     </div>
                     <div>
-                      <h3 className="font-bold mb-2">Execute & Profit</h3>
+                      <h3 className="font-bold mb-2">Evaluate risk</h3>
                       <p className="text-gray-400">
-                        Follow the signals, manage your risk, and track your performance.
+                        Signals do not guarantee outcomes. Apply independent judgment and appropriate risk controls.
                       </p>
                     </div>
                   </div>
@@ -419,17 +430,17 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                       <Bell className="w-5 h-5 mr-3 text-gold-400" />
                       <span>Real-time signal notifications</span>
                     </div>
-                    <div className="flex items-center text-gray-300">
+                    {signalPlan.max_signals_per_day > 0 && <div className="flex items-center text-gray-300">
                       <TrendingUp className="w-5 h-5 mr-3 text-gold-400" />
-                      <span>{signalPlan.max_signals_per_day} signals per day</span>
-                    </div>
+                      <span>Up to {signalPlan.max_signals_per_day} signals per day</span>
+                    </div>}
                     <div className="flex items-center text-gray-300">
                       <BarChart3 className="w-5 h-5 mr-3 text-gold-400" />
                       <span>Detailed entry & exit points</span>
                     </div>
                     <div className="flex items-center text-gray-300">
                       <Award className="w-5 h-5 mr-3 text-gold-400" />
-                      <span>87% average win rate</span>
+                      <span>Risk disclosure included</span>
                     </div>
                     <div className="flex items-center text-gray-300">
                       <Clock className="w-5 h-5 mr-3 text-gold-400" />
@@ -445,7 +456,7 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                         ${product.price}
                       </div>
                       <p className="text-sm text-gray-500 mb-4">
-                        per {signalPlan.interval}
+                        one-time payment for {signalPlan.duration_days} days
                       </p>
                       <button onClick={handleSubscribe} className="gold-button w-full">
                         <ShoppingCart className="w-5 h-5 mr-2" />
@@ -453,7 +464,7 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
                       </button>
                     </div>
                     <p className="text-xs text-gray-500 text-center">
-                      Cancel anytime. No hidden fees.
+                      One-time payment. Access expires after the selected duration; no automatic renewal.
                     </p>
                   </>
                 )}
