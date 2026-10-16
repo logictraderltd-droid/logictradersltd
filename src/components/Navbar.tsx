@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, TrendingUp } from "lucide-react";
+import { Menu, X, TrendingUp, UserRound } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navLinks = [
   { label: "Home", href: "/" },
@@ -15,14 +16,24 @@ const navLinks = [
   { label: "Pro Firm", href: "/pricing" },
 ];
 
-const authLinks = [
-  { label: "Login", href: "/login" },
-  { label: "Register", href: "/register" },
-];
-
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, profile, isAuthenticated, isLoading } = useAuth();
+  const dashboardHref = user?.role === "admin" ? "/admin" : "/dashboard";
+  const displayName = (
+    profile?.full_name ||
+    user?.full_name ||
+    [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
+    user?.email?.split("@")[0] ||
+    ""
+  ).trim();
+  const initials = displayName
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join("");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -69,20 +80,36 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Desktop Auth Buttons */}
+          {/* Desktop account actions */}
           <div className="hidden lg:flex items-center space-x-4">
-            <Link
-              href="/login"
-              className="text-sm font-medium text-gray-300 hover:text-gold-400 transition-colors"
-            >
-              Login
-            </Link>
-            <Link
-              href="/register"
-              className="gold-button text-sm"
-            >
-              Register
-            </Link>
+            {!isLoading && isAuthenticated ? (
+              <Link
+                href={dashboardHref}
+                className="flex items-center gap-3 rounded-full border border-gold-500/20 bg-dark-900/70 py-1.5 pl-1.5 pr-4 transition-colors hover:border-gold-500/50"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-500/15 text-sm font-bold text-gold-300">
+                  {initials || <UserRound className="h-4 w-4" />}
+                </span>
+                <span className="max-w-36 truncate text-sm font-medium text-white">
+                  {displayName || "My account"}
+                </span>
+                <span className="text-xs text-gold-400">
+                  {user?.role === "admin" ? "Admin" : "Dashboard"}
+                </span>
+              </Link>
+            ) : !isLoading ? (
+              <>
+                <Link
+                  href="/login"
+                  className="text-sm font-medium text-gray-300 hover:text-gold-400 transition-colors"
+                >
+                  Login
+                </Link>
+                <Link href="/register" className="gold-button text-sm">
+                  Register
+                </Link>
+              </>
+            ) : null}
           </div>
 
           {/* Mobile Menu Button */}
@@ -121,20 +148,42 @@ export default function Navbar() {
                 </Link>
               ))}
               <div className="pt-4 border-t border-dark-800 space-y-3">
-                <Link
-                  href="/login"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block py-2 text-gray-300 hover:text-gold-400 transition-colors"
-                >
-                  Login
-                </Link>
-                <Link
-                  href="/register"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block w-full text-center gold-button"
-                >
-                  Register
-                </Link>
+                {!isLoading && isAuthenticated ? (
+                  <Link
+                    href={dashboardHref}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-3 rounded-xl border border-gold-500/20 bg-dark-900/70 p-3"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold-500/15 text-sm font-bold text-gold-300">
+                      {initials || <UserRound className="h-4 w-4" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-white">
+                        {displayName || "My account"}
+                      </span>
+                      <span className="block text-sm text-gold-400">
+                        {user?.role === "admin" ? "Admin dashboard" : "Go to dashboard"}
+                      </span>
+                    </span>
+                  </Link>
+                ) : !isLoading ? (
+                  <>
+                    <Link
+                      href="/login"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="block py-2 text-gray-300 hover:text-gold-400 transition-colors"
+                    >
+                      Login
+                    </Link>
+                    <Link
+                      href="/register"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="block w-full text-center gold-button"
+                    >
+                      Register
+                    </Link>
+                  </>
+                ) : null}
               </div>
             </div>
           </motion.div>
