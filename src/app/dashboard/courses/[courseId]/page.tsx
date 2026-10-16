@@ -6,6 +6,7 @@ import { ArrowLeft, Play, Lock, CheckCircle, Clock, BookOpen, Download, AlertCir
 import { createBrowserClient } from "@/lib/supabase";
 import { Course, CourseLesson } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { getYouTubeEmbedUrl } from "@/lib/video";
 
 export default function CourseViewerPage() {
     const params = useParams();
@@ -250,13 +251,24 @@ export default function CourseViewerPage() {
                                 </div>
                             ) : activeLesson ? (
                                 <div className="absolute inset-0 z-10" key={activeLesson.id}>
-                                    <video
-                                        src={activeLesson.video_url}
-                                        controls
-                                        autoPlay
-                                        className="w-full h-full object-contain bg-black"
-                                        poster={activeLesson.thumbnail_url || course.thumbnail_url}
-                                    />
+                                    {getYouTubeEmbedUrl(activeLesson.video_url, true) ? (
+                                        <iframe
+                                            src={getYouTubeEmbedUrl(activeLesson.video_url, true) || undefined}
+                                            title={activeLesson.title}
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                            referrerPolicy="strict-origin-when-cross-origin"
+                                            className="w-full h-full border-0 bg-black"
+                                        />
+                                    ) : (
+                                        <video
+                                            src={activeLesson.video_url}
+                                            controls
+                                            autoPlay
+                                            className="w-full h-full object-contain bg-black"
+                                            poster={activeLesson.thumbnail_url || course.thumbnail_url}
+                                        />
+                                    )}
                                 </div>
                             ) : (
                                 <div className="absolute inset-0 flex items-center justify-center bg-dark-900 font-display">

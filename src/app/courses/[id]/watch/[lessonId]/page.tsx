@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { createBrowserClient } from "@/lib/supabase";
+import { getYouTubeEmbedUrl } from "@/lib/video";
 
 interface CourseLesson {
   id: string;
@@ -42,6 +43,7 @@ export default function WatchLessonPage({
   const [currentLesson, setCurrentLesson] = useState<CourseLesson | null>(null);
   const [allLessons, setAllLessons] = useState<CourseLesson[]>([]);
   const [videoUrl, setVideoUrl] = useState<string>("");
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -101,8 +103,10 @@ export default function WatchLessonPage({
 
       // Free courses require a signed-in account; paid courses require an unexpired entitlement.
       const isFreeCourse = courseData?.is_active === true && courseData.metadata?.is_free === true;
+      let canWatch = false;
       if (user && isFreeCourse) {
         setHasAccess(true);
+        canWatch = true;
       } else if (user) {
         const { data: accessData } = await supabase
           .from("user_access")
@@ -114,30 +118,31 @@ export default function WatchLessonPage({
 
         const access = !!accessData && (!accessData.expires_at || new Date(accessData.expires_at) > new Date());
         setHasAccess(access);
+        canWatch = access;
+      }
 
-        if (access) {
-          // Fetch signed video URL from API
-          const response = await fetch(`/api/videos/${params.lessonId}`);
-          const data = await response.json();
-          if (data.url) {
-            setVideoUrl(data.url);
-          }
+      if (user && canWatch) {
+        const response = await fetch(`/api/videos/${params.lessonId}`);
+        const data = await response.json();
+        if (!response.ok || typeof data.url !== 'string') {
+          throw new Error(data.error || 'Unable to load this course video.');
+        }
+        setVideoUrl(data.url);
 
-          // Fetch existing progress
-          const { data: progressData } = await supabase
-            .from("video_progress")
-            .select("progress_seconds, completed")
-            .eq("user_id", user.id)
-            .eq("lesson_id", params.lessonId)
-            .single();
+        const { data: progressData } = await supabase
+          .from("video_progress")
+          .select("progress_seconds, completed")
+          .eq("user_id", user.id)
+          .eq("lesson_id", params.lessonId)
+          .maybeSingle();
 
-          if (progressData?.progress_seconds) {
-            setProgress(progressData.progress_seconds);
-          }
+        if (progressData?.progress_seconds) {
+          setProgress(progressData.progress_seconds);
         }
       }
     } catch (error) {
       console.error("Error fetching lesson:", error);
+      setVideoError(error instanceof Error ? error.message : 'Unable to load this course video.');
     } finally {
       setIsLoading(false);
     }
@@ -258,28 +263,39 @@ export default function WatchLessonPage({
           {/* Video Player */}
           <div className="aspect-video bg-black">
             {videoUrl ? (
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                controls
-                controlsList="nodownload"
-                className="w-full h-full"
-                onPlay={handleVideoPlay}
-                onPause={handleVideoPause}
-                onEnded={handleVideoEnded}
-                onLoadedMetadata={() => {
-                  if (videoRef.current && progress > 0) {
-                    videoRef.current.currentTime = progress;
-                  }
-                }}
-              >
-                Your browser does not support the video tag.
-              </video>
+              getYouTubeEmbedUrl(videoUrl) ? (
+                <iframe
+                  src={getYouTubeEmbedUrl(videoUrl) || undefined}
+                  title={currentLesson?.title || course?.name || 'Course video'}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  className="h-full w-full border-0"
+                />
+              ) : (
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  controls
+                  controlsList="nodownload"
+                  className="w-full h-full"
+                  onPlay={handleVideoPlay}
+                  onPause={handleVideoPause}
+                  onEnded={handleVideoEnded}
+                  onLoadedMetadata={() => {
+                    if (videoRef.current && progress > 0) {
+                      videoRef.current.currentTime = progress;
+                    }
+                  }}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              )
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <div className="text-center">
                   <PlayCircle className="w-20 h-20 text-gray-600 mx-auto mb-4" />
-                  <p className="text-gray-400">Loading video...</p>
+                  <p className="text-gray-400">{videoError || 'Loading video...'}</p>
                 </div>
               </div>
             )}
