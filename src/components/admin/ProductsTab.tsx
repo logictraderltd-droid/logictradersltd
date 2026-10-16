@@ -253,14 +253,11 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 requirements,
             };
 
-            // The supplied schema uses products.type and products.price. A fallback
-            // keeps installations using product_type/price_cents working as well.
-            const schemaProductPayload: Record<string, any> = {
+            const productPayload: Record<string, any> = {
                 name: formData.name,
                 description: formData.description,
-                type: productType,
-                price: priceValue,
-                currency: 'USD',
+                product_type: productType,
+                price_cents: Math.round(priceValue * 100),
                 is_active: formData.is_active,
                 thumbnail_url: formData.thumbnail_url || null,
                 metadata,
@@ -280,50 +277,26 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 metadata.features = listItems;
             }
 
-            if (!schemaProductPayload.thumbnail_url) delete schemaProductPayload.thumbnail_url;
-
-            const compatibilityProductPayload = {
-                name: schemaProductPayload.name,
-                description: schemaProductPayload.description,
-                product_type: productType,
-                price_cents: Math.round(priceValue * 100),
-                is_active: schemaProductPayload.is_active,
-                ...(schemaProductPayload.thumbnail_url ? { thumbnail_url: schemaProductPayload.thumbnail_url } : {}),
-                metadata,
-            };
+            if (!productPayload.thumbnail_url) delete productPayload.thumbnail_url;
 
             let savedProductId = editingProduct?.id || null;
 
             if (editingProduct) {
-                let { error: updateError } = await supabase
+                const { error: updateError } = await supabase
                     .from("products")
-                    .update(schemaProductPayload)
+                    .update(productPayload)
                     .eq("id", editingProduct.id);
-                if (isMissingSchemaField(updateError, 'type') || isMissingSchemaField(updateError, 'price')) {
-                    const compatibilityPayload = { ...compatibilityProductPayload };
-                    ({ error: updateError } = await supabase
-                        .from("products")
-                        .update(compatibilityPayload)
-                        .eq("id", editingProduct.id));
-                }
                 if (updateError) throw updateError;
             } else {
-                let { data: insertedProduct, error: insertError } = await supabase
+                const { data: insertedProduct, error: insertError } = await supabase
                     .from("products")
-                    .insert(schemaProductPayload)
+                    .insert(productPayload)
                     .select('id')
                     .single();
-                if (isMissingSchemaField(insertError, 'type') || isMissingSchemaField(insertError, 'price')) {
-                    ({ data: insertedProduct, error: insertError } = await supabase
-                        .from("products")
-                        .insert(compatibilityProductPayload)
-                        .select('id')
-                        .single());
-                }
                 if (insertError) throw insertError;
                 if (!insertedProduct) throw new Error("Supabase did not return the newly created product ID.");
                 savedProductId = insertedProduct.id;
-                setEditingProduct({ ...schemaProductPayload, id: insertedProduct.id } as Product);
+                setEditingProduct({ ...productPayload, id: insertedProduct.id } as Product);
             }
 
             if (productType === 'bot' && savedProductId) {
