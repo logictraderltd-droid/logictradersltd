@@ -9,6 +9,8 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
+SET lock_timeout = '5s'
+SET statement_timeout = '15s'
 AS $$
 DECLARE
   current_items JSONB;

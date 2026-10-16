@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Play } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
+import { subscribeToPlatformContentChanges } from "@/lib/platformContentSync";
 
 export interface PlatformListing {
   id: string;
@@ -86,11 +87,13 @@ export default function PlatformListings({
           console.error(`Live updates unavailable for ${contentKey}:`, status);
         }
       });
+    const unsubscribeFromLocalUpdates = subscribeToPlatformContentChanges(contentKey, () => void loadListings());
     const handleWindowFocus = () => void loadListings();
     window.addEventListener("focus", handleWindowFocus);
 
     return () => {
       cancelled = true;
+      unsubscribeFromLocalUpdates();
       window.removeEventListener("focus", handleWindowFocus);
       void supabase.removeChannel(channel);
     };

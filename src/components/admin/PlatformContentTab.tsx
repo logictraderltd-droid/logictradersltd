@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { CldUploadWidget } from "next-cloudinary";
 import { createBrowserClient } from "@/lib/supabase";
+import { notifyPlatformContentChanged } from "@/lib/platformContentSync";
 import type { PlatformListing } from "@/components/PlatformListings";
 
 const contentSections = [
@@ -97,6 +98,26 @@ function isMissingListingFunction(error: unknown) {
   const databaseError = error as { code?: string; message?: string };
   return databaseError.code === "PGRST202" ||
     /could not find the function|function .* does not exist/i.test(databaseError.message ?? "");
+}
+
+function withRequestTimeout<T>(
+  request: (signal: AbortSignal) => PromiseLike<T>,
+  timeoutMs = 20_000,
+): Promise<T> {
+  const controller = new AbortController();
+  let timeoutId: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      controller.abort();
+      reject(new Error(`The database request timed out after ${timeoutMs / 1000} seconds. Your draft is preserved; reload before retrying because the request may still finish on the server.`));
+    }, timeoutMs);
+  });
+
+  const pendingRequest = Promise.resolve().then(() => request(controller.signal));
+  return Promise.race([pendingRequest, timeout])
+    .finally(() => {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    });
 }
 
 export function PlatformContentTab() {
@@ -227,23 +248,19 @@ export function PlatformContentTab() {
     setNotice("");
     const savedListing = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
     try {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
       const supabase = createBrowserClient();
-      let result;
-      try {
-        result = await supabase.rpc("manage_platform_listing", {
+      const result = await withRequestTimeout((signal) =>
+        supabase.rpc("manage_platform_listing", {
           p_key: sectionKey,
           p_listing: savedListing,
           p_delete: false,
-        }).abortSignal(controller.signal);
-      } finally {
-        window.clearTimeout(timeoutId);
-      }
+        }).abortSignal(signal),
+      );
       const { data, error } = result;
       if (error) throw error;
       if (!Array.isArray(data)) throw new Error("The database returned an invalid listing response.");
       setItems(data as PlatformListing[]);
+      notifyPlatformContentChanged(sectionKey);
       saveDraftLocally(sectionKey, null);
       setDraft(null);
       setNotice(`"${savedListing.title}" saved successfully.`);
@@ -265,23 +282,19 @@ export function PlatformContentTab() {
     setIsSaving(true);
     setNotice("");
     try {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
       const supabase = createBrowserClient();
-      let result;
-      try {
-        result = await supabase.rpc("manage_platform_listing", {
+      const result = await withRequestTimeout((signal) =>
+        supabase.rpc("manage_platform_listing", {
           p_key: sectionKey,
           p_listing: item,
           p_delete: true,
-        }).abortSignal(controller.signal);
-      } finally {
-        window.clearTimeout(timeoutId);
-      }
+        }).abortSignal(signal),
+      );
       const { data, error } = result;
       if (error) throw error;
       if (!Array.isArray(data)) throw new Error("The database returned an invalid listing response.");
       setItems(data as PlatformListing[]);
+      notifyPlatformContentChanged(sectionKey);
       setNotice(`"${item.title}" deleted.`);
     } catch (error) {
       console.error("Unable to delete platform listing:", error);
