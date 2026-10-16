@@ -220,7 +220,10 @@ export default function AdminDashboard() {
                   )}
 
                   {activeTab === "users" && (
-                    <UsersTab users={users} />
+                    <UsersTab
+                      users={users}
+                      onRefresh={() => fetchTabData(true)}
+                    />
                   )}
 
                   {activeTab === "products" && (
