@@ -148,11 +148,13 @@ export function PlatformContentTab() {
   }, [sectionKey, hasRestoredSection]);
 
   useEffect(() => {
+    if (!hasRestoredSection) return;
     let cancelled = false;
     const load = async () => {
       setIsLoading(true);
       setHasLoadError(false);
       setNotice("");
+      setDraft(readStoredDraft(sectionKey));
       try {
         const supabase = createBrowserClient();
         const { data, error } = await supabase
@@ -164,7 +166,6 @@ export function PlatformContentTab() {
         if (error) throw error;
         if (!cancelled) {
           setItems(Array.isArray(data) ? data as PlatformListing[] : []);
-          setDraft(readStoredDraft(sectionKey));
         }
       } catch (error) {
         console.error("Unable to load platform content:", error);
@@ -183,7 +184,7 @@ export function PlatformContentTab() {
     };
     void load();
     return () => { cancelled = true; };
-  }, [sectionKey, loadAttempt]);
+  }, [sectionKey, loadAttempt, hasRestoredSection]);
 
   const saveDraftLocally = (key: string, value: PlatformListing | null) => {
     try {
@@ -374,7 +375,7 @@ export function PlatformContentTab() {
 
       <div className="flex flex-wrap gap-2">
         {contentSections.map((entry) => (
-          <button key={entry.key} type="button" onClick={() => {
+          <button key={entry.key} type="button" disabled={isSaving} onClick={() => {
             saveDraftLocally(sectionKey, draft);
             try {
               window.localStorage.setItem(ACTIVE_SECTION_STORAGE_KEY, entry.key);
@@ -387,7 +388,7 @@ export function PlatformContentTab() {
             setSectionKey(entry.key);
             setDraft(null);
             setNotice("");
-          }} className={`rounded-lg px-4 py-2 text-sm font-medium ${sectionKey === entry.key ? "bg-gold-500 text-dark-950" : "bg-dark-800 text-gray-300"}`}>
+          }} className={`rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${sectionKey === entry.key ? "bg-gold-500 text-dark-950" : "bg-dark-800 text-gray-300"}`}>
             {entry.title}
           </button>
         ))}
