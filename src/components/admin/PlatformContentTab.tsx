@@ -93,27 +93,18 @@ function describeDatabaseError(error: unknown) {
   return error instanceof Error ? error.message : "Unknown database error.";
 }
 
-function isMissingListingFunction(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const databaseError = error as { code?: string; message?: string };
-  return databaseError.code === "PGRST202" ||
-    /could not find the function|function .* does not exist/i.test(databaseError.message ?? "");
-}
-
 function withRequestTimeout<T>(
-  request: (signal: AbortSignal) => PromiseLike<T>,
+  request: () => PromiseLike<T>,
   timeoutMs = 20_000,
 ): Promise<T> {
-  const controller = new AbortController();
   let timeoutId: number | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = window.setTimeout(() => {
-      controller.abort();
       reject(new Error(`The database request timed out after ${timeoutMs / 1000} seconds. Your draft is preserved; reload before retrying because the request may still finish on the server.`));
     }, timeoutMs);
   });
 
-  const pendingRequest = Promise.resolve().then(() => request(controller.signal));
+  const pendingRequest = Promise.resolve().then(request);
   return Promise.race([pendingRequest, timeout])
     .finally(() => {
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
@@ -244,34 +235,46 @@ export function PlatformContentTab() {
       setNotice("Check the listing fields: name must be 1–160 characters, description up to 5,000, URLs up to 2,048 characters, and URLs must be valid HTTP(S) links.");
       return;
     }
+    if (hasLoadError || isLoading) {
+      setNotice("This section has not loaded successfully. Retry loading it before saving so existing listings are not overwritten.");
+      return;
+    }
     setIsSaving(true);
     setNotice("");
     const savedListing = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
     try {
       const supabase = createBrowserClient();
-      const result = await withRequestTimeout((signal) =>
-        supabase.rpc("manage_platform_listing", {
-          p_key: sectionKey,
-          p_listing: savedListing,
-          p_delete: false,
-        }).abortSignal(signal),
+      const orderedItems = [...items].sort((a, b) => a.sort_order - b.sort_order);
+      const isEditing = orderedItems.some((item) => item.id === savedListing.id);
+      const nextItems = isEditing
+        ? orderedItems
+          .map((item) => item.id === savedListing.id ? savedListing : item)
+          .sort((a, b) => a.sort_order - b.sort_order)
+        : [savedListing, ...orderedItems];
+      const normalizedItems = nextItems.map((item, index) => ({ ...item, sort_order: index }));
+      const result = await withRequestTimeout(() =>
+        supabase
+          .from("site_content")
+          .upsert({
+            key: sectionKey,
+            value: { items: normalizedItems },
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "key" })
+          .select("value")
+          .single(),
       );
       const { data, error } = result;
       if (error) throw error;
-      if (!Array.isArray(data)) throw new Error("The database returned an invalid listing response.");
-      setItems(data as PlatformListing[]);
+      const savedItems = data?.value?.items;
+      if (!Array.isArray(savedItems)) throw new Error("The database did not return the saved listings.");
+      setItems(savedItems as PlatformListing[]);
       notifyPlatformContentChanged(sectionKey);
       saveDraftLocally(sectionKey, null);
       setDraft(null);
       setNotice(`"${savedListing.title}" saved successfully.`);
     } catch (error) {
       console.error("Unable to save platform content:", error);
-      const details = describeDatabaseError(error);
-      setNotice(
-        isMissingListingFunction(error)
-          ? `The database save function is not installed yet. Run the new platform-content migration in Supabase, then retry. ${details}`
-          : `Could not save "${savedListing.title}". Your draft is preserved. ${details}`,
-      );
+      setNotice(`Could not save "${savedListing.title}". Your draft is preserved. ${describeDatabaseError(error)}`);
     } finally {
       setIsSaving(false);
     }
@@ -279,31 +282,39 @@ export function PlatformContentTab() {
 
   const deleteListing = async (item: PlatformListing) => {
     if (isSaving || !window.confirm(`Delete "${item.title}"? This will remove it from the public site.`)) return;
+    if (hasLoadError || isLoading) {
+      setNotice("This section has not loaded successfully. Retry loading it before deleting a listing.");
+      return;
+    }
     setIsSaving(true);
     setNotice("");
     try {
       const supabase = createBrowserClient();
-      const result = await withRequestTimeout((signal) =>
-        supabase.rpc("manage_platform_listing", {
-          p_key: sectionKey,
-          p_listing: item,
-          p_delete: true,
-        }).abortSignal(signal),
+      const nextItems = [...items]
+        .filter((entry) => entry.id !== item.id)
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((entry, index) => ({ ...entry, sort_order: index }));
+      const result = await withRequestTimeout(() =>
+        supabase
+          .from("site_content")
+          .upsert({
+            key: sectionKey,
+            value: { items: nextItems },
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "key" })
+          .select("value")
+          .single(),
       );
       const { data, error } = result;
       if (error) throw error;
-      if (!Array.isArray(data)) throw new Error("The database returned an invalid listing response.");
-      setItems(data as PlatformListing[]);
+      const savedItems = data?.value?.items;
+      if (!Array.isArray(savedItems)) throw new Error("The database did not return the saved listings.");
+      setItems(savedItems as PlatformListing[]);
       notifyPlatformContentChanged(sectionKey);
       setNotice(`"${item.title}" deleted.`);
     } catch (error) {
       console.error("Unable to delete platform listing:", error);
-      const details = describeDatabaseError(error);
-      setNotice(
-        isMissingListingFunction(error)
-          ? `The database save function is not installed yet. Run the new platform-content migration in Supabase, then retry. ${details}`
-          : `Could not delete "${item.title}". ${details}`,
-      );
+      setNotice(`Could not delete "${item.title}". ${describeDatabaseError(error)}`);
     } finally {
       setIsSaving(false);
     }
