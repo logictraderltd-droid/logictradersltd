@@ -12,7 +12,7 @@ const contentSections = [
   { key: "copy_trading_content", title: "Copy Trading", description: "Providers, strategies, promotional images, videos, and links." },
 ] as const;
 
-const blankListing = (sortOrder = 0): PlatformListing => ({
+const blankListing = (): PlatformListing => ({
   id: crypto.randomUUID(),
   title: "",
   image_url: "",
@@ -20,8 +20,54 @@ const blankListing = (sortOrder = 0): PlatformListing => ({
   description: "",
   affiliate_url: "",
   published: true,
-  sort_order: sortOrder,
+  sort_order: 0,
 });
+
+const getDraftStorageKey = (sectionKey: string) => `platform-content-draft:${sectionKey}`;
+
+function readStoredDraft(sectionKey: string): PlatformListing | null {
+  try {
+    const stored = window.localStorage.getItem(getDraftStorageKey(sectionKey));
+    if (!stored) return null;
+    const value: unknown = JSON.parse(stored);
+    if (
+      !value ||
+      typeof value !== "object" ||
+      Array.isArray(value) ||
+      !("id" in value) ||
+      typeof value.id !== "string" ||
+      !("title" in value) ||
+      typeof value.title !== "string" ||
+      !("image_url" in value) ||
+      typeof value.image_url !== "string" ||
+      !("video_url" in value) ||
+      typeof value.video_url !== "string" ||
+      !("description" in value) ||
+      typeof value.description !== "string" ||
+      !("affiliate_url" in value) ||
+      typeof value.affiliate_url !== "string" ||
+      !("published" in value) ||
+      typeof value.published !== "boolean" ||
+      !("sort_order" in value) ||
+      typeof value.sort_order !== "number"
+    ) {
+      return null;
+    }
+    return {
+      id: value.id,
+      title: value.title,
+      image_url: value.image_url,
+      video_url: value.video_url,
+      description: value.description,
+      affiliate_url: value.affiliate_url,
+      published: value.published,
+      sort_order: value.sort_order,
+    };
+  } catch (error) {
+    console.error("Unable to restore saved listing draft:", error);
+    return null;
+  }
+}
 
 function validOptionalUrl(value: string) {
   if (!value.trim()) return true;
@@ -58,6 +104,7 @@ export function PlatformContentTab() {
         if (error) throw error;
         if (!cancelled) {
           setItems(Array.isArray(data?.value?.items) ? data.value.items : []);
+          setDraft(readStoredDraft(sectionKey));
         }
       } catch (error) {
         console.error("Unable to load platform content:", error);
@@ -72,6 +119,26 @@ export function PlatformContentTab() {
     void load();
     return () => { cancelled = true; };
   }, [sectionKey, loadAttempt]);
+
+  const saveDraftLocally = (key: string, value: PlatformListing | null) => {
+    try {
+      if (value) {
+        window.localStorage.setItem(getDraftStorageKey(key), JSON.stringify(value));
+      } else {
+        window.localStorage.removeItem(getDraftStorageKey(key));
+      }
+    } catch (error) {
+      console.error("Unable to persist listing draft in this browser:", error);
+      setNotice("The draft could not be saved in this browser. Keep this page open until the listing is saved.");
+    }
+  };
+
+  const updateDraft = (patch: Partial<PlatformListing>) => {
+    if (!draft) return;
+    const updatedDraft = { ...draft, ...patch };
+    setDraft(updatedDraft);
+    saveDraftLocally(sectionKey, updatedDraft);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -106,9 +173,11 @@ export function PlatformContentTab() {
     setIsSaving(true);
     setNotice("");
     const savedListing = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
-    const nextItems = items.some((item) => item.id === draft.id)
+    const isEditing = items.some((item) => item.id === draft.id);
+    const nextItems = isEditing
       ? items.map((item) => item.id === draft.id ? savedListing : item)
-      : [...items, savedListing];
+      : [savedListing, ...items.map((item) => ({ ...item, sort_order: item.sort_order + 1 }))];
+    nextItems.sort((a, b) => a.sort_order - b.sort_order);
     try {
       const { error } = await createBrowserClient().from("site_content").upsert(
         { key: sectionKey, value: { items: nextItems }, updated_at: new Date().toISOString() },
@@ -116,6 +185,7 @@ export function PlatformContentTab() {
       );
       if (error) throw error;
       setItems(nextItems);
+      saveDraftLocally(sectionKey, null);
       setDraft(null);
       setNotice(`"${savedListing.title}" saved successfully.`);
     } catch (error) {
@@ -186,7 +256,15 @@ export function PlatformContentTab() {
 
       <div className="flex flex-wrap gap-2">
         {contentSections.map((entry) => (
-          <button key={entry.key} type="button" onClick={() => { setItems([]); setIsLoading(true); setHasLoadError(false); setSectionKey(entry.key); setDraft(null); setNotice(""); }} className={`rounded-lg px-4 py-2 text-sm font-medium ${sectionKey === entry.key ? "bg-gold-500 text-dark-950" : "bg-dark-800 text-gray-300"}`}>
+          <button key={entry.key} type="button" onClick={() => {
+            saveDraftLocally(sectionKey, draft);
+            setItems([]);
+            setIsLoading(true);
+            setHasLoadError(false);
+            setSectionKey(entry.key);
+            setDraft(null);
+            setNotice("");
+          }} className={`rounded-lg px-4 py-2 text-sm font-medium ${sectionKey === entry.key ? "bg-gold-500 text-dark-950" : "bg-dark-800 text-gray-300"}`}>
             {entry.title}
           </button>
         ))}
@@ -195,7 +273,7 @@ export function PlatformContentTab() {
       <section className="space-y-5">
         <div className="flex items-center justify-between gap-4">
           <div><h3 className="text-xl font-semibold text-white">{section.title}</h3><p className="text-sm text-gray-400">{section.description}</p></div>
-          <button type="button" disabled={isLoading || isSaving || hasLoadError} onClick={() => { setDraft(blankListing(Math.max(-1, ...items.map((item) => item.sort_order)) + 1)); setNotice(""); }} className="inline-flex items-center gap-2 rounded-lg bg-dark-800 px-4 py-2 text-sm text-white hover:bg-dark-700 disabled:opacity-50"><Plus className="h-4 w-4" /> Add listing</button>
+          <button type="button" disabled={isLoading || isSaving || hasLoadError} onClick={() => { const newDraft = blankListing(); setDraft(newDraft); saveDraftLocally(sectionKey, newDraft); setNotice(""); }} className="inline-flex items-center gap-2 rounded-lg bg-dark-800 px-4 py-2 text-sm text-white hover:bg-dark-700 disabled:opacity-50"><Plus className="h-4 w-4" /> Add listing</button>
         </div>
         {notice && <p role="status" className="rounded-lg border border-dark-700 bg-dark-900 px-4 py-3 text-sm text-gray-300">{notice}</p>}
         {hasLoadError && <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="text-sm font-semibold text-gold-400 underline">Retry loading listings</button>}
@@ -219,7 +297,7 @@ export function PlatformContentTab() {
                   {item.affiliate_url && <p className="mt-1 truncate text-xs text-gold-400">{item.affiliate_url}</p>}
                 </div>
                 <div className="flex shrink-0 gap-2">
-                  <button type="button" disabled={isSaving} onClick={() => { setDraft({ ...item }); setNotice(""); }} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-3 py-2 text-sm text-gray-200 hover:border-gold-500/50 disabled:opacity-50">
+                  <button type="button" disabled={isSaving} onClick={() => { const editDraft = { ...item }; setDraft(editDraft); saveDraftLocally(sectionKey, editDraft); setNotice(""); }} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-3 py-2 text-sm text-gray-200 hover:border-gold-500/50 disabled:opacity-50">
                     <Pencil className="h-4 w-4" /> Edit
                   </button>
                   <button type="button" disabled={isSaving} onClick={() => void deleteListing(item)} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-3 py-2 text-sm text-red-400 hover:border-red-500/50 disabled:opacity-50" aria-label={`Delete ${item.title}`}>
@@ -237,17 +315,17 @@ export function PlatformContentTab() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="text-xl font-semibold text-white">{items.some((item) => item.id === draft.id) ? "Edit listing" : "Add listing"}</h3>
-              <p className="text-sm text-gray-400">Save this listing before starting another.</p>
+              <p className="text-sm text-gray-400">Your unfinished changes are saved in this browser automatically.</p>
             </div>
-            <button type="button" disabled={isSaving} onClick={() => setDraft(null)} className="rounded-lg p-2 text-gray-400 hover:bg-dark-800 hover:text-white" aria-label="Close listing editor"><X className="h-5 w-5" /></button>
+            <button type="button" disabled={isSaving} onClick={() => { saveDraftLocally(sectionKey, null); setDraft(null); }} className="rounded-lg p-2 text-gray-400 hover:bg-dark-800 hover:text-white" aria-label="Close listing editor"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-1 text-sm text-gray-400">Name / title<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} className="dark-input w-full" required /></label>
+            <label className="space-y-1 text-sm text-gray-400">Name / title<input value={draft.title} onChange={(event) => updateDraft({ title: event.target.value })} className="dark-input w-full" required /></label>
             <div className="space-y-1 text-sm text-gray-400">
               <label htmlFor="listing-image">Profile / image URL</label>
               <div className="flex gap-2">
-                <input id="listing-image" type="url" value={draft.image_url} onChange={(event) => setDraft({ ...draft, image_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
-                <CldUploadWidget uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"} onSuccess={(result: any) => { if (result.info?.secure_url) setDraft((current) => current ? { ...current, image_url: result.info.secure_url } : current); }}>
+                <input id="listing-image" type="url" value={draft.image_url} onChange={(event) => updateDraft({ image_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
+                <CldUploadWidget uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"} onSuccess={(result: any) => { if (result.info?.secure_url) updateDraft({ image_url: result.info.secure_url }); }}>
                   {({ open }) => <button type="button" onClick={() => open()} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-dark-700 bg-dark-800 px-3 text-gray-300"><Upload className="h-4 w-4" /> Upload</button>}
                 </CldUploadWidget>
               </div>
@@ -255,20 +333,20 @@ export function PlatformContentTab() {
             <div className="space-y-1 text-sm text-gray-400">
               <label htmlFor="listing-video">Video URL (YouTube, Vimeo, or hosted video)</label>
               <div className="flex gap-2">
-                <input id="listing-video" type="url" value={draft.video_url} onChange={(event) => setDraft({ ...draft, video_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
-                <CldUploadWidget uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"} options={{ resourceType: "video" }} onSuccess={(result: any) => { if (result.info?.secure_url) setDraft((current) => current ? { ...current, video_url: result.info.secure_url } : current); }}>
+                <input id="listing-video" type="url" value={draft.video_url} onChange={(event) => updateDraft({ video_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
+                <CldUploadWidget uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"} options={{ resourceType: "video" }} onSuccess={(result: any) => { if (result.info?.secure_url) updateDraft({ video_url: result.info.secure_url }); }}>
                   {({ open }) => <button type="button" onClick={() => open()} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-dark-700 bg-dark-800 px-3 text-gray-300"><Upload className="h-4 w-4" /> Upload</button>}
                 </CldUploadWidget>
               </div>
             </div>
-            <label className="space-y-1 text-sm text-gray-400">Affiliate / provider URL<input type="url" value={draft.affiliate_url} onChange={(event) => setDraft({ ...draft, affiliate_url: event.target.value })} className="dark-input w-full" placeholder="https://" /></label>
-            <label className="space-y-1 text-sm text-gray-400">Display order<input type="number" value={draft.sort_order} onChange={(event) => setDraft({ ...draft, sort_order: Number(event.target.value) })} className="dark-input w-full" /></label>
-            <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={draft.published} onChange={(event) => setDraft({ ...draft, published: event.target.checked })} /> Published on the public site</label>
+            <label className="space-y-1 text-sm text-gray-400">Affiliate / provider URL<input type="url" value={draft.affiliate_url} onChange={(event) => updateDraft({ affiliate_url: event.target.value })} className="dark-input w-full" placeholder="https://" /></label>
+            <label className="space-y-1 text-sm text-gray-400">Display order<input type="number" value={draft.sort_order} onChange={(event) => updateDraft({ sort_order: Number(event.target.value) })} className="dark-input w-full" /></label>
+            <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={draft.published} onChange={(event) => updateDraft({ published: event.target.checked })} /> Published on the public site</label>
           </div>
-          <label className="block space-y-1 text-sm text-gray-400">Image / video description<textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className="dark-input min-h-24 w-full" /></label>
+          <label className="block space-y-1 text-sm text-gray-400">Image / video description<textarea value={draft.description} onChange={(event) => updateDraft({ description: event.target.value })} className="dark-input min-h-24 w-full" /></label>
           <div className="flex flex-wrap items-center gap-3">
             <button type="submit" disabled={isSaving || isLoading} className="gold-button inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4" />{isSaving ? "Saving..." : "Save listing"}</button>
-            <button type="button" disabled={isSaving} onClick={() => setDraft(null)} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-4 py-2 text-sm text-gray-300 hover:bg-dark-800 disabled:opacity-50"><X className="h-4 w-4" /> Cancel</button>
+            <button type="button" disabled={isSaving} onClick={() => { saveDraftLocally(sectionKey, null); setDraft(null); }} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-4 py-2 text-sm text-gray-300 hover:bg-dark-800 disabled:opacity-50"><X className="h-4 w-4" /> Cancel</button>
             {notice && <p role="status" className="text-sm text-gray-300">{notice}</p>}
           </div>
         </form>
