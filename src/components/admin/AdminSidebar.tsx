@@ -10,6 +10,7 @@ import {
     LogOut,
     X,
     Megaphone,
+    ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -28,6 +29,7 @@ const menuItems = [
     { id: "orders", label: "Orders", icon: ShoppingCart },
     { id: "signals", label: "Signals", icon: Bell },
     { id: "marketing", label: "Marketing", icon: Megaphone },
+    { id: "cfd_blocker", label: "CFD Blocker", icon: ShieldCheck },
     { id: "settings", label: "Settings", icon: Settings },
 ];
 

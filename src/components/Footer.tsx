@@ -8,6 +8,7 @@ const footerLinks = {
     { label: "Courses", href: "/courses" },
     { label: "Signals", href: "/signals" },
     { label: "Trading Bots", href: "/bots" },
+    { label: "CFD Blocker", href: "/cfd-blocker" },
   ],
   company: [
     { label: "About Us", href: "/about" },
@@ -53,11 +54,11 @@ export default function Footer() {
             <div className="space-y-3">
               <div className="flex items-center space-x-3 text-sm text-gray-400">
                 <Mail className="w-4 h-4 text-gold-400" />
-                <span>support@logictradersltd.com</span>
+                <span>logictradersltd@gmail.com</span>
               </div>
               <div className="flex items-center space-x-3 text-sm text-gray-400">
                 <Phone className="w-4 h-4 text-gold-400" />
-                <span>+1 (555) 123-4567</span>
+                <span>+ (250) 794303438</span>
               </div>
               <div className="flex items-center space-x-3 text-sm text-gray-400">
                 <MapPin className="w-4 h-4 text-gold-400" />

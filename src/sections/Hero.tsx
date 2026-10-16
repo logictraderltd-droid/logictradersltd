@@ -31,6 +31,7 @@ const shortsNavigation = [
   { label: "Courses", href: "/courses" },
   { label: "Signals", href: "/signals" },
   { label: "Bots", href: "/bots" },
+  { label: "CFD Blocker", href: "/cfd-blocker" },
   { label: "Dashboard", href: "/dashboard" },
 ];
 

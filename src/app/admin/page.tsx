@@ -49,6 +49,7 @@ import { OrdersTab } from "@/components/admin/OrdersTab";
 import { SignalsTab } from "@/components/admin/SignalsTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
 import { MarketingTab } from "@/components/admin/MarketingTab";
+import { CFDBlockersTab } from "@/components/admin/CFDBlockersTab";
 
 interface AdminStats {
   totalUsers: number;
@@ -283,6 +284,10 @@ export default function AdminDashboard() {
 
                   {activeTab === "marketing" && (
                     <MarketingTab />
+                  )}
+
+                  {activeTab === "cfd_blocker" && (
+                    <CFDBlockersTab />
                   )}
 
                   {activeTab === "settings" && (

@@ -11,6 +11,7 @@ const navLinks = [
   { label: "Courses", href: "/courses" },
   { label: "Signals", href: "/signals" },
   { label: "Bots", href: "/bots" },
+  { label: "CFD Blocker", href: "/cfd-blocker" },
 ];
 
 export default function Navbar() {
