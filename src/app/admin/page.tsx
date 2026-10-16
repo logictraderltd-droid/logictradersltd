@@ -49,7 +49,6 @@ import { OrdersTab } from "@/components/admin/OrdersTab";
 import { SignalsTab } from "@/components/admin/SignalsTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
 import { MarketingTab } from "@/components/admin/MarketingTab";
-import { PlatformContentTab } from "@/components/admin/PlatformContentTab";
 
 interface AdminStats {
   totalUsers: number;
@@ -222,7 +221,7 @@ export default function AdminDashboard() {
         <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
           <div className="max-w-7xl mx-auto min-h-full flex flex-col">
             <AnimatePresence mode="wait">
-              {activeTab === "content" ? null : isLoading && !dataFetchedRef.current[activeTab] ? (
+              {isLoading && !dataFetchedRef.current[activeTab] ? (
                 <motion.div
                   key="loader"
                   initial={{ opacity: 0 }}
@@ -292,9 +291,6 @@ export default function AdminDashboard() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className={activeTab === "content" ? "w-full" : "hidden"}>
-              <PlatformContentTab />
-            </div>
           </div>
         </main>
 

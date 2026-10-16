@@ -8,9 +8,6 @@ const footerLinks = {
     { label: "Courses", href: "/courses" },
     { label: "Signals", href: "/signals" },
     { label: "Trading Bots", href: "/bots" },
-    { label: "CFD Blocker", href: "/cfd-blocker" },
-    { label: "Copy Trading", href: "/copy-trading" },
-    { label: "Pro Firm", href: "/pro-firm" },
   ],
   company: [
     { label: "About Us", href: "/about" },

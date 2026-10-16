@@ -10,7 +10,6 @@ import {
     LogOut,
     X,
     Megaphone,
-    PanelsTopLeft,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -29,7 +28,6 @@ const menuItems = [
     { id: "orders", label: "Orders", icon: ShoppingCart },
     { id: "signals", label: "Signals", icon: Bell },
     { id: "marketing", label: "Marketing", icon: Megaphone },
-    { id: "content", label: "Platform Content", icon: PanelsTopLeft },
     { id: "settings", label: "Settings", icon: Settings },
 ];
 
