@@ -58,12 +58,12 @@ export default function PlatformListings({
           .eq("key", contentKey)
           .maybeSingle();
         if (error) throw error;
-        if (!cancelled) {
-          const records = Array.isArray(data?.value?.items) ? data.value.items : [];
-          setItems(records
-            .filter((item: PlatformListing) => item.published)
-            .sort((a: PlatformListing, b: PlatformListing) => a.sort_order - b.sort_order));
-        }
+        if (cancelled) return;
+        const records = Array.isArray(data?.value?.items) ? data.value.items : [];
+        setItems(records
+          .filter((item: PlatformListing) => item.published)
+          .sort((a: PlatformListing, b: PlatformListing) => a.sort_order - b.sort_order));
+        setLoadError("");
       } catch (error) {
         console.error(`Unable to load ${contentKey}:`, error);
         if (!cancelled) setLoadError("This section is temporarily unavailable.");
@@ -72,11 +72,32 @@ export default function PlatformListings({
       }
     };
     void loadListings();
-    return () => { cancelled = true; };
+
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel(`platform-listings-${contentKey}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "site_content", filter: `key=eq.${contentKey}` },
+        () => void loadListings(),
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error(`Live updates unavailable for ${contentKey}:`, status);
+        }
+      });
+    const handleWindowFocus = () => void loadListings();
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleWindowFocus);
+      void supabase.removeChannel(channel);
+    };
   }, [contentKey]);
 
   return (
-    <main className="min-h-screen bg-dark-950 text-white">
+    <section className="min-h-screen bg-dark-950 text-white">
       <section className="pt-32 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
@@ -131,6 +152,6 @@ export default function PlatformListings({
           </p>
         </div>
       </section>
-    </main>
+    </section>
   );
 }

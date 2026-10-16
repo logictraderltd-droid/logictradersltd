@@ -31,7 +31,7 @@ const shortsNavigation = [
   { label: "Courses", href: "/courses" },
   { label: "Signals", href: "/signals" },
   { label: "Bots", href: "/bots" },
-  { label: "Pro Firm", href: "/pricing" },
+  { label: "Pro Firm", href: "/pro-firm" },
   { label: "Dashboard", href: "/dashboard" },
 ];
 

@@ -32,8 +32,8 @@ function validOptionalUrl(value: string) {
   }
 }
 
-export function PlatformContentTab() {
-  const [sectionKey, setSectionKey] = useState<string>(contentSections[0].key);
+export function PlatformContentTab({ initialSectionKey = contentSections[0].key }: { initialSectionKey?: string }) {
+  const [sectionKey, setSectionKey] = useState<string>(initialSectionKey);
   const [items, setItems] = useState<PlatformListing[]>([]);
   const [communityUrl, setCommunityUrl] = useState("");
   const [vipUrl, setVipUrl] = useState("");

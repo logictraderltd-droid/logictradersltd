@@ -16,7 +16,6 @@ import { ProductsTab } from "@/components/admin/ProductsTab";
 import { OrdersTab } from "@/components/admin/OrdersTab";
 import { SignalsTab } from "@/components/admin/SignalsTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
-import { ProFirmTab } from "@/components/admin/ProFirmTab";
 import { MarketingTab } from "@/components/admin/MarketingTab";
 import { PlatformContentTab } from "@/components/admin/PlatformContentTab";
 
@@ -256,7 +255,7 @@ export default function AdminDashboard() {
                   )}
 
                   {activeTab === "pro-firm" && (
-                    <ProFirmTab />
+                    <PlatformContentTab initialSectionKey="pro_firm_listings" />
                   )}
 
                   {activeTab === "settings" && (
