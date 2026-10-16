@@ -22,7 +22,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<{ error: string | null }>;
-  socialLogin: (provider: 'google' | 'github') => Promise<{ error: string | null }>;
+  socialLogin: (provider: 'google') => Promise<{ error: string | null }>;
   register: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const socialLogin = async (provider: 'google' | 'github') : Promise<{ error: string | null }> => {
+  const socialLogin = async (provider: 'google') : Promise<{ error: string | null }> => {
     try {
       console.log('🔐 Starting social login for:', provider);
       setIsLoading(true);
