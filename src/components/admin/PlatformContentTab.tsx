@@ -24,6 +24,7 @@ const blankListing = (): PlatformListing => ({
 });
 
 const getDraftStorageKey = (sectionKey: string) => `platform-content-draft:${sectionKey}`;
+const ACTIVE_SECTION_STORAGE_KEY = "platform-content-active-section";
 
 function readStoredDraft(sectionKey: string): PlatformListing | null {
   try {
@@ -80,6 +81,7 @@ function validOptionalUrl(value: string) {
 
 export function PlatformContentTab() {
   const [sectionKey, setSectionKey] = useState<string>(contentSections[0].key);
+  const [hasRestoredSection, setHasRestoredSection] = useState(false);
   const [items, setItems] = useState<PlatformListing[]>([]);
   const [draft, setDraft] = useState<PlatformListing | null>(null);
   const [communityUrl, setCommunityUrl] = useState("");
@@ -91,6 +93,27 @@ export function PlatformContentTab() {
   const [notice, setNotice] = useState("");
 
   const section = contentSections.find((entry) => entry.key === sectionKey) ?? contentSections[0];
+
+  useEffect(() => {
+    try {
+      const storedSectionKey = window.localStorage.getItem(ACTIVE_SECTION_STORAGE_KEY);
+      if (contentSections.some((entry) => entry.key === storedSectionKey)) {
+        setSectionKey(storedSectionKey as string);
+      }
+    } catch (error) {
+      console.error("Unable to restore the active platform content section:", error);
+    }
+    setHasRestoredSection(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasRestoredSection) return;
+    try {
+      window.localStorage.setItem(ACTIVE_SECTION_STORAGE_KEY, sectionKey);
+    } catch (error) {
+      console.error("Unable to remember the active platform content section:", error);
+    }
+  }, [sectionKey, hasRestoredSection]);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,10 +197,13 @@ export function PlatformContentTab() {
     setNotice("");
     const savedListing = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
     const isEditing = items.some((item) => item.id === draft.id);
+    const orderedItems = [...items].sort((a, b) => a.sort_order - b.sort_order);
     const nextItems = isEditing
-      ? items.map((item) => item.id === draft.id ? savedListing : item)
-      : [savedListing, ...items.map((item) => ({ ...item, sort_order: item.sort_order + 1 }))];
-    nextItems.sort((a, b) => a.sort_order - b.sort_order);
+      ? orderedItems.map((item) => item.id === draft.id ? savedListing : item)
+      : [savedListing, ...orderedItems];
+    nextItems.forEach((item, index) => {
+      item.sort_order = index;
+    });
     try {
       const { error } = await createBrowserClient().from("site_content").upsert(
         { key: sectionKey, value: { items: nextItems }, updated_at: new Date().toISOString() },
@@ -258,6 +284,11 @@ export function PlatformContentTab() {
         {contentSections.map((entry) => (
           <button key={entry.key} type="button" onClick={() => {
             saveDraftLocally(sectionKey, draft);
+            try {
+              window.localStorage.setItem(ACTIVE_SECTION_STORAGE_KEY, entry.key);
+            } catch (error) {
+              console.error("Unable to remember the selected platform content section:", error);
+            }
             setItems([]);
             setIsLoading(true);
             setHasLoadError(false);
@@ -277,37 +308,6 @@ export function PlatformContentTab() {
         </div>
         {notice && <p role="status" className="rounded-lg border border-dark-700 bg-dark-900 px-4 py-3 text-sm text-gray-300">{notice}</p>}
         {hasLoadError && <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="text-sm font-semibold text-gold-400 underline">Retry loading listings</button>}
-        {isLoading ? <div className="spinner" /> : items.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-dark-700 p-8 text-center text-gray-500">No saved listings yet. Use “Add listing” to create one.</p>
-        ) : (
-          <div className="space-y-3">
-            {items.map((item) => (
-              <article key={item.id} className="dark-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
-                {item.image_url ? <img src={item.image_url} alt="" className="h-20 w-28 rounded-lg bg-dark-950 object-cover" /> : (
-                  <div className="flex h-20 w-28 items-center justify-center rounded-lg bg-dark-950 text-xs text-gray-600">No image</div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="font-semibold text-white">{item.title}</h4>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${item.published ? "bg-green-500/10 text-green-400" : "bg-gray-500/10 text-gray-400"}`}>
-                      {item.published ? "Published" : "Draft"}
-                    </span>
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-sm text-gray-400">{item.description || "No description added."}</p>
-                  {item.affiliate_url && <p className="mt-1 truncate text-xs text-gold-400">{item.affiliate_url}</p>}
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button type="button" disabled={isSaving} onClick={() => { const editDraft = { ...item }; setDraft(editDraft); saveDraftLocally(sectionKey, editDraft); setNotice(""); }} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-3 py-2 text-sm text-gray-200 hover:border-gold-500/50 disabled:opacity-50">
-                    <Pencil className="h-4 w-4" /> Edit
-                  </button>
-                  <button type="button" disabled={isSaving} onClick={() => void deleteListing(item)} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-3 py-2 text-sm text-red-400 hover:border-red-500/50 disabled:opacity-50" aria-label={`Delete ${item.title}`}>
-                    <Trash2 className="h-4 w-4" /> Delete
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
       </section>
 
       {draft && (
@@ -351,6 +351,41 @@ export function PlatformContentTab() {
           </div>
         </form>
       )}
+
+      <section className="space-y-3">
+        <h3 className="text-lg font-semibold text-white">Saved listings</h3>
+        {isLoading ? <div className="spinner" /> : items.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-dark-700 p-8 text-center text-gray-500">No saved listings yet. Use “Add listing” to create one.</p>
+        ) : (
+          <div className="space-y-3">
+            {[...items].sort((a, b) => a.sort_order - b.sort_order).map((item) => (
+              <article key={item.id} className="dark-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+                {item.image_url ? <img src={item.image_url} alt="" className="h-20 w-28 rounded-lg bg-dark-950 object-cover" /> : (
+                  <div className="flex h-20 w-28 items-center justify-center rounded-lg bg-dark-950 text-xs text-gray-600">No image</div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="font-semibold text-white">{item.title}</h4>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${item.published ? "bg-green-500/10 text-green-400" : "bg-gray-500/10 text-gray-400"}`}>
+                      {item.published ? "Published" : "Draft"}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-sm text-gray-400">{item.description || "No description added."}</p>
+                  {item.affiliate_url && <p className="mt-1 truncate text-xs text-gold-400">{item.affiliate_url}</p>}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" disabled={isSaving} onClick={() => { const editDraft = { ...item }; setDraft(editDraft); saveDraftLocally(sectionKey, editDraft); setNotice(""); }} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-3 py-2 text-sm text-gray-200 hover:border-gold-500/50 disabled:opacity-50">
+                    <Pencil className="h-4 w-4" /> Edit
+                  </button>
+                  <button type="button" disabled={isSaving} onClick={() => void deleteListing(item)} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-3 py-2 text-sm text-red-400 hover:border-red-500/50 disabled:opacity-50" aria-label={`Delete ${item.title}`}>
+                    <Trash2 className="h-4 w-4" /> Delete
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="dark-card space-y-4 p-5">
         <div><h3 className="text-xl font-semibold text-white">Signals community links</h3><p className="text-sm text-gray-400">Public community and paid VIP destinations. VIP link is only shown to users with current access.</p></div>
