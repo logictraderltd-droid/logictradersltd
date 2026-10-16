@@ -79,6 +79,26 @@ function validOptionalUrl(value: string) {
   }
 }
 
+function describeDatabaseError(error: unknown) {
+  if (error && typeof error === "object") {
+    const databaseError = error as { code?: string; message?: string; details?: string; hint?: string };
+    if ("name" in error && error.name === "AbortError") {
+      return "The database request timed out after 20 seconds. Your draft is preserved; reload this section before retrying to confirm whether it reached the database.";
+    }
+    return [databaseError.message, databaseError.details, databaseError.hint, databaseError.code ? `Code: ${databaseError.code}` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+  return error instanceof Error ? error.message : "Unknown database error.";
+}
+
+function isMissingListingFunction(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const databaseError = error as { code?: string; message?: string };
+  return databaseError.code === "PGRST202" ||
+    /could not find the function|function .* does not exist/i.test(databaseError.message ?? "");
+}
+
 export function PlatformContentTab() {
   const [sectionKey, setSectionKey] = useState<string>(contentSections[0].key);
   const [hasRestoredSection, setHasRestoredSection] = useState(false);
@@ -189,34 +209,52 @@ export function PlatformContentTab() {
   const saveListing = async (event: FormEvent) => {
     event.preventDefault();
     if (!draft) return;
-    if (!draft.title.trim() || !validOptionalUrl(draft.image_url) || !validOptionalUrl(draft.video_url) || !validOptionalUrl(draft.affiliate_url)) {
-      setNotice("The listing needs a name. Image, video, and affiliate links must be valid HTTP(S) URLs.");
+    if (
+      !draft.title.trim() ||
+      draft.title.trim().length > 160 ||
+      draft.description.length > 5000 ||
+      draft.image_url.length > 2048 ||
+      draft.video_url.length > 2048 ||
+      draft.affiliate_url.length > 2048 ||
+      !validOptionalUrl(draft.image_url) ||
+      !validOptionalUrl(draft.video_url) ||
+      !validOptionalUrl(draft.affiliate_url)
+    ) {
+      setNotice("Check the listing fields: name must be 1–160 characters, description up to 5,000, URLs up to 2,048 characters, and URLs must be valid HTTP(S) links.");
       return;
     }
     setIsSaving(true);
     setNotice("");
     const savedListing = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
-    const isEditing = items.some((item) => item.id === draft.id);
-    const orderedItems = [...items].sort((a, b) => a.sort_order - b.sort_order);
-    const nextItems = isEditing
-      ? orderedItems.map((item) => item.id === draft.id ? savedListing : item)
-      : [savedListing, ...orderedItems];
-    nextItems.forEach((item, index) => {
-      item.sort_order = index;
-    });
     try {
-      const { error } = await createBrowserClient().from("site_content").upsert(
-        { key: sectionKey, value: { items: nextItems }, updated_at: new Date().toISOString() },
-        { onConflict: "key" },
-      );
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
+      const supabase = createBrowserClient();
+      let result;
+      try {
+        result = await supabase.rpc("manage_platform_listing", {
+          p_key: sectionKey,
+          p_listing: savedListing,
+          p_delete: false,
+        }).abortSignal(controller.signal);
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+      const { data, error } = result;
       if (error) throw error;
-      setItems(nextItems);
+      if (!Array.isArray(data)) throw new Error("The database returned an invalid listing response.");
+      setItems(data as PlatformListing[]);
       saveDraftLocally(sectionKey, null);
       setDraft(null);
       setNotice(`"${savedListing.title}" saved successfully.`);
     } catch (error) {
       console.error("Unable to save platform content:", error);
-      setNotice("Could not save content. Check that the Supabase migration and admin policies are applied.");
+      const details = describeDatabaseError(error);
+      setNotice(
+        isMissingListingFunction(error)
+          ? `The database save function is not installed yet. Run the new platform-content migration in Supabase, then retry. ${details}`
+          : `Could not save "${savedListing.title}". Your draft is preserved. ${details}`,
+      );
     } finally {
       setIsSaving(false);
     }
@@ -226,18 +264,33 @@ export function PlatformContentTab() {
     if (isSaving || !window.confirm(`Delete "${item.title}"? This will remove it from the public site.`)) return;
     setIsSaving(true);
     setNotice("");
-    const nextItems = items.filter((entry) => entry.id !== item.id);
     try {
-      const { error } = await createBrowserClient().from("site_content").upsert(
-        { key: sectionKey, value: { items: nextItems }, updated_at: new Date().toISOString() },
-        { onConflict: "key" },
-      );
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
+      const supabase = createBrowserClient();
+      let result;
+      try {
+        result = await supabase.rpc("manage_platform_listing", {
+          p_key: sectionKey,
+          p_listing: item,
+          p_delete: true,
+        }).abortSignal(controller.signal);
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+      const { data, error } = result;
       if (error) throw error;
-      setItems(nextItems);
+      if (!Array.isArray(data)) throw new Error("The database returned an invalid listing response.");
+      setItems(data as PlatformListing[]);
       setNotice(`"${item.title}" deleted.`);
     } catch (error) {
       console.error("Unable to delete platform listing:", error);
-      setNotice("Could not delete this listing. Please retry.");
+      const details = describeDatabaseError(error);
+      setNotice(
+        isMissingListingFunction(error)
+          ? `The database save function is not installed yet. Run the new platform-content migration in Supabase, then retry. ${details}`
+          : `Could not delete "${item.title}". ${details}`,
+      );
     } finally {
       setIsSaving(false);
     }
@@ -272,6 +325,8 @@ export function PlatformContentTab() {
       setIsSaving(false);
     }
   };
+
+  const repeatedUrlCount = draft ? (draft.description.match(/https?:\/\//gi) || []).length : 0;
 
   return (
     <div className="space-y-8">
@@ -320,11 +375,11 @@ export function PlatformContentTab() {
             <button type="button" disabled={isSaving} onClick={() => { saveDraftLocally(sectionKey, null); setDraft(null); }} className="rounded-lg p-2 text-gray-400 hover:bg-dark-800 hover:text-white" aria-label="Close listing editor"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-1 text-sm text-gray-400">Name / title<input value={draft.title} onChange={(event) => updateDraft({ title: event.target.value })} className="dark-input w-full" required /></label>
+            <label className="space-y-1 text-sm text-gray-400">Name / title<input value={draft.title} maxLength={160} onChange={(event) => updateDraft({ title: event.target.value })} className="dark-input w-full" required /></label>
             <div className="space-y-1 text-sm text-gray-400">
               <label htmlFor="listing-image">Profile / image URL</label>
               <div className="flex gap-2">
-                <input id="listing-image" type="url" value={draft.image_url} onChange={(event) => updateDraft({ image_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
+                <input id="listing-image" type="url" value={draft.image_url} maxLength={2048} onChange={(event) => updateDraft({ image_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
                 <CldUploadWidget uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"} onSuccess={(result: any) => { if (result.info?.secure_url) updateDraft({ image_url: result.info.secure_url }); }}>
                   {({ open }) => <button type="button" onClick={() => open()} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-dark-700 bg-dark-800 px-3 text-gray-300"><Upload className="h-4 w-4" /> Upload</button>}
                 </CldUploadWidget>
@@ -333,17 +388,21 @@ export function PlatformContentTab() {
             <div className="space-y-1 text-sm text-gray-400">
               <label htmlFor="listing-video">Video URL (YouTube, Vimeo, or hosted video)</label>
               <div className="flex gap-2">
-                <input id="listing-video" type="url" value={draft.video_url} onChange={(event) => updateDraft({ video_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
+                <input id="listing-video" type="url" value={draft.video_url} maxLength={2048} onChange={(event) => updateDraft({ video_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
                 <CldUploadWidget uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"} options={{ resourceType: "video" }} onSuccess={(result: any) => { if (result.info?.secure_url) updateDraft({ video_url: result.info.secure_url }); }}>
                   {({ open }) => <button type="button" onClick={() => open()} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-dark-700 bg-dark-800 px-3 text-gray-300"><Upload className="h-4 w-4" /> Upload</button>}
                 </CldUploadWidget>
               </div>
             </div>
-            <label className="space-y-1 text-sm text-gray-400">Affiliate / provider URL<input type="url" value={draft.affiliate_url} onChange={(event) => updateDraft({ affiliate_url: event.target.value })} className="dark-input w-full" placeholder="https://" /></label>
+            <label className="space-y-1 text-sm text-gray-400">Affiliate / provider URL<input type="url" value={draft.affiliate_url} maxLength={2048} onChange={(event) => updateDraft({ affiliate_url: event.target.value })} className="dark-input w-full" placeholder="https://" /></label>
             <label className="space-y-1 text-sm text-gray-400">Display order<input type="number" value={draft.sort_order} onChange={(event) => updateDraft({ sort_order: Number(event.target.value) })} className="dark-input w-full" /></label>
             <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={draft.published} onChange={(event) => updateDraft({ published: event.target.checked })} /> Published on the public site</label>
           </div>
-          <label className="block space-y-1 text-sm text-gray-400">Image / video description<textarea value={draft.description} onChange={(event) => updateDraft({ description: event.target.value })} className="dark-input min-h-24 w-full" /></label>
+          <label className="block space-y-1 text-sm text-gray-400">Image / video description<textarea value={draft.description} maxLength={5000} onChange={(event) => updateDraft({ description: event.target.value })} className="dark-input min-h-24 w-full" /></label>
+          <div className="flex flex-wrap justify-between gap-2 text-xs text-gray-500">
+            <span>{draft.description.length}/5000 characters</span>
+            {repeatedUrlCount > 2 && <span className="text-amber-300">This description contains {repeatedUrlCount} URLs. Check for accidental repeated pastes.</span>}
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <button type="submit" disabled={isSaving || isLoading} className="gold-button inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4" />{isSaving ? "Saving..." : "Save listing"}</button>
             <button type="button" disabled={isSaving} onClick={() => { saveDraftLocally(sectionKey, null); setDraft(null); }} className="inline-flex items-center gap-2 rounded-lg border border-dark-700 px-4 py-2 text-sm text-gray-300 hover:bg-dark-800 disabled:opacity-50"><X className="h-4 w-4" /> Cancel</button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Play } from "lucide-react";
+import { Play } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 
 export interface PlatformListing {
@@ -135,8 +135,8 @@ export default function PlatformListings({
                         <img src={item.image_url} alt="" className="mt-4 max-h-40 w-full rounded-lg object-cover" />
                       )}
                       {item.affiliate_url && isSafeExternalUrl(item.affiliate_url) && (
-                        <a href={item.affiliate_url} target="_blank" rel="nofollow sponsored noopener noreferrer" className="gold-button mt-6 inline-flex items-center gap-2">
-                          Learn more <ArrowUpRight className="h-4 w-4" />
+                        <a href={item.affiliate_url} target="_blank" rel="nofollow sponsored noopener noreferrer" className="mt-6 inline-block text-sm font-semibold text-gold-400 underline decoration-gold-400/60 underline-offset-4 hover:text-gold-300">
+                          Click this link for more information
                         </a>
                       )}
                     </div>
