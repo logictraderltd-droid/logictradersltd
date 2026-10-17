@@ -117,6 +117,7 @@ export async function POST(request: Request) {
     await fulfillVerifiedOrder({
       orderId: order.id,
       userId: order.user_id,
+      grantedByUserId: user.id,
       productId: order.product_id,
       productType: order.product_type,
       originalAmountCents: Number(paymentRequest.original_amount_cents),

@@ -49,6 +49,7 @@ async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   await fulfillVerifiedOrder({
     orderId,
     userId,
+    grantedByUserId: userId,
     productId,
     productType: order.product_type,
     originalAmountCents: Number(order.amount_cents),

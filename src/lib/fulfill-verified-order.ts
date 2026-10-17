@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase";
 export interface VerifiedOrderPayment {
   orderId: string;
   userId: string;
+  grantedByUserId: string;
   productId: string;
   productType: string;
   originalAmountCents: number;
@@ -114,7 +115,7 @@ export async function fulfillVerifiedOrder(payment: VerifiedOrderPayment) {
       product_id: payment.productId,
       product_type: payment.productType,
       order_id: payment.orderId,
-      granted_by: "payment",
+      granted_by: payment.grantedByUserId,
       is_active: true,
       expires_at: expiresAt,
       access_expires_at: expiresAt,
