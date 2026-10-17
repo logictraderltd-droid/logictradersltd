@@ -77,6 +77,7 @@ function CheckoutContent() {
   const [mt5AccountNumber, setMt5AccountNumber] = useState("");
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [requestError, setRequestError] = useState("");
+  const [canUseManualDialFallback, setCanUseManualDialFallback] = useState(false);
   const [isSavingReference, setIsSavingReference] = useState(false);
   const [copiedItem, setCopiedItem] = useState("");
 
@@ -207,6 +208,9 @@ function CheckoutContent() {
 
     setIsProcessing(true);
     setRequestError("");
+    setCanUseManualDialFallback(false);
+    let isServerFailure = false;
+    let responseReceived = false;
     try {
       const response = await fetch("/api/payments/manual/create", {
         method: "POST",
@@ -221,12 +225,17 @@ function CheckoutContent() {
           mt5AccountNumber,
         }),
       });
+      responseReceived = true;
+      isServerFailure = response.status >= 500;
       const data = await response.json();
       if (!response.ok) {
         if (data.refreshQuote) {
           setQuote(null);
           setQuoteError("");
           setQuoteVersion((version) => version + 1);
+        }
+        if (response.status >= 500 && paymentMethod === "mobile_money") {
+          setCanUseManualDialFallback(true);
         }
         throw new Error(data.error || "Unable to create a payment request.");
       }
@@ -235,6 +244,9 @@ function CheckoutContent() {
       setPaymentRequest(data.request);
     } catch (error) {
       console.error("Manual payment request failed:", error);
+      if ((isServerFailure || !responseReceived) && paymentMethod === "mobile_money") {
+        setCanUseManualDialFallback(true);
+      }
       setRequestError(error instanceof Error ? error.message : "Unable to create a payment request.");
     } finally {
       setIsProcessing(false);
@@ -442,6 +454,47 @@ function CheckoutContent() {
                       </div>
                     )}
                     {requestError && <p role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{requestError}</p>}
+                    {canUseManualDialFallback && paymentMethod === "mobile_money" && quote && (
+                      <div className="mb-4 space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+                        <p className="font-semibold">You can send the quoted amount directly by Mobile Money</p>
+                        <p>
+                          Amount: <strong>{quote.quote.amount}</strong>. The dial code is valid only until{" "}
+                          {new Date(quote.quote.expiresAt).toLocaleTimeString()}.
+                        </p>
+                        <p className="break-all font-mono text-white">
+                          {`${MOMO_USSD}*${quote.quote.amountMinor}#`}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href={`tel:${MOMO_USSD}*${quote.quote.amountMinor}%23`}
+                            onClick={(event) => {
+                              if (Date.parse(quote.quote.expiresAt) <= Date.now()) {
+                                event.preventDefault();
+                                setCanUseManualDialFallback(false);
+                                setRequestError("This quote has expired. Get a fresh quote before sending payment.");
+                                setQuote(null);
+                                setQuoteVersion((version) => version + 1);
+                              }
+                            }}
+                            className="inline-flex items-center gap-2 rounded-lg bg-gold-500 px-4 py-2 font-semibold text-dark-950"
+                          >
+                            Dial exact amount <ExternalLink className="h-4 w-4" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => void copyValue(`${MOMO_USSD}*${quote.quote.amountMinor}#`, "fallback-ussd")}
+                            className="inline-flex items-center gap-2 rounded-lg border border-dark-600 px-4 py-2 text-white"
+                          >
+                            <Copy className="h-4 w-4" /> {copiedItem === "fallback-ussd" ? "Copied" : "Copy dial code"}
+                          </button>
+                        </div>
+                        <p className="text-xs text-amber-200">
+                          This direct transfer does not create a website order or confirm payment. Keep the Mobile Money
+                          transaction SMS/reference and contact the site administrator to have the payment matched and
+                          verified. Product access is not granted until verification.
+                        </p>
+                      </div>
+                    )}
                     {!isAuthenticated && <p className="mb-4 text-center text-sm text-gray-400">Sign in to request a payment quote and place an order.</p>}
                     <button type="button" onClick={handleCheckout}
                       disabled={isProcessing || (isAuthenticated && (!quote || Boolean(quoteError)))}
