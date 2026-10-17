@@ -1,19 +1,18 @@
-import type { Metadata } from "next";
-import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import CFDBlockers from "@/components/CFDBlockers";
-
-export const metadata: Metadata = {
-  title: "CFD Blocker | LOGICTRADERSLTD",
-  description: "Explore CFD blocker providers, product details, videos, and affiliate offers.",
-};
+import Navbar from "@/components/Navbar";
+import PlatformListings from "@/components/PlatformListings";
 
 export default function CfdBlockerPage() {
   return (
-    <main className="min-h-screen bg-dark-950">
+    <>
       <Navbar />
-      <CFDBlockers />
+      <PlatformListings
+        contentKey="cfd_blocker_content"
+        title="CFD Blocker"
+        description="Explore the CFD Blocker providers and resources selected by our team."
+        emptyMessage="CFD Blocker listings will appear here when published."
+      />
       <Footer />
-    </main>
+    </>
   );
 }

@@ -12,6 +12,8 @@ const navLinks = [
   { label: "Signals", href: "/signals" },
   { label: "Bots", href: "/bots" },
   { label: "CFD Blocker", href: "/cfd-blocker" },
+  { label: "Copy Trading", href: "/copy-trading" },
+  { label: "Pro Firm", href: "/pricing" },
 ];
 
 export default function Navbar() {

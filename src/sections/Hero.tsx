@@ -5,12 +5,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, Play, Video, Volume2, VolumeX, Youtube, Instagram, Facebook, Send, Music2, Globe, Maximize2, Minimize2 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
-import { getYouTubeEmbedUrl } from "@/lib/video";
 
 interface ShortVideo {
   id: string;
   name: string;
-  title?: string;
   description: string;
   type: string;
   thumbnail_url?: string;
@@ -26,12 +24,13 @@ interface StoredSocialLink {
 }
 
 const defaultShorts: ShortVideo[] = [];
+const defaultSocialLinks: Array<{ label: string; icon: any; href: string }> = [];
 const shortsNavigation = [
   { label: "Home", href: "/" },
   { label: "Courses", href: "/courses" },
   { label: "Signals", href: "/signals" },
   { label: "Bots", href: "/bots" },
-  { label: "CFD Blocker", href: "/cfd-blocker" },
+  { label: "Pro Firm", href: "/pricing" },
   { label: "Dashboard", href: "/dashboard" },
 ];
 
@@ -66,9 +65,10 @@ const FloatingParticle = ({ delay = 0, x, y }: { delay?: number; x: string; y: s
 
 export default function Hero() {
   const [shorts, setShorts] = useState<ShortVideo[]>(defaultShorts);
-  const [socialLinks, setSocialLinks] = useState<StoredSocialLink[]>([]);
+  const [socialLinks, setSocialLinks] = useState(defaultSocialLinks);
   const [isLoadingShorts, setIsLoadingShorts] = useState(true);
   const [muted, setMuted] = useState(true);
+  const [hasCustomMarketing, setHasCustomMarketing] = useState(false);
   const [isFullscreenShorts, setIsFullscreenShorts] = useState(false);
   const [fullscreenStartId, setFullscreenStartId] = useState<string | null>(null);
 
@@ -116,23 +116,7 @@ export default function Hero() {
       className={`relative h-full min-h-full snap-start overflow-hidden bg-black ${fullscreen ? "mx-auto w-full max-w-[520px]" : "cursor-zoom-in"}`}
     >
       {short.source === "youtube" ? (
-        getYouTubeEmbedUrl(short.video_url) ? (
-          <iframe
-            className="h-full w-full"
-            src={`${getYouTubeEmbedUrl(short.video_url)}&mute=${muted ? "1" : "0"}`}
-            title={short.name}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
-            <Youtube className="h-10 w-10 text-red-500" />
-            <p className="text-sm text-white">This YouTube video link is invalid or unavailable.</p>
-            <a href={short.video_url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-gold-300 underline">
-              Open video on YouTube
-            </a>
-          </div>
-        )
+        <iframe className="h-full w-full" src={short.video_url.replace("mute=1", `mute=${muted ? "1" : "0"}`)} title={short.name} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
       ) : (
         <video className="h-full w-full object-cover" src={short.video_url} poster={short.thumbnail_url} muted={muted} loop playsInline autoPlay />
       )}
@@ -150,11 +134,9 @@ export default function Hero() {
   );
 
   useEffect(() => {
-    let isMounted = true;
-    const supabase = createBrowserClient();
-
-    const loadMarketingContent = async (initialLoad = false) => {
+    const loadMarketingContent = async () => {
       try {
+        const supabase = createBrowserClient();
         const { data, error } = await supabase
           .from("site_content")
           .select("value")
@@ -162,62 +144,49 @@ export default function Hero() {
           .maybeSingle();
 
         if (error && error.code !== "PGRST116") throw error;
+
         if (data?.value) {
-          const bannerData = data.value as {
-            shorts?: ShortVideo[];
-            socialLinks?: Array<{ id?: string; label: string; href: string; platform?: string }>;
-          };
-          if (isMounted) {
-            setShorts(Array.isArray(bannerData.shorts) ? bannerData.shorts.map((item) => ({
+          const bannerData = data.value as { shorts?: ShortVideo[]; socialLinks?: Array<{ label: string; href: string; platform?: string }> };
+          if (Array.isArray(bannerData.shorts) && bannerData.shorts.length > 0) {
+            setHasCustomMarketing(true);
+            setShorts(bannerData.shorts.map((item: any) => ({
               id: item.id,
               name: item.name || item.title || "Market short",
               description: item.description || "",
               type: item.type || "short",
               thumbnail_url: item.thumbnail_url,
               video_url: item.video_url,
-              source: item.source === "video" ? "video" : "youtube",
-            })) : []);
-            setSocialLinks(Array.isArray(bannerData.socialLinks) ? bannerData.socialLinks.map((link) => ({
-              id: link.id || link.href,
+              source: item.source || "youtube",
+            })));
+          } else {
+            setHasCustomMarketing(false);
+            setShorts([]);
+          }
+
+          if (Array.isArray(bannerData.socialLinks) && bannerData.socialLinks.length > 0) {
+            setSocialLinks(bannerData.socialLinks.map((link) => ({
               label: link.label,
               href: link.href,
-              platform: (link.platform as StoredSocialLink["platform"]) || "custom",
-            })) : []);
-          }
-        } else {
-          if (isMounted) {
-            setShorts([]);
+              icon: getSocialIcon((link.platform as StoredSocialLink["platform"]) || "custom"),
+            })));
+          } else {
             setSocialLinks([]);
           }
-        }
-      } catch (error) {
-        console.error("Unable to load marketing content:", error);
-        if (isMounted && initialLoad) {
+        } else {
+          setHasCustomMarketing(false);
           setShorts([]);
           setSocialLinks([]);
         }
+      } catch (error) {
+        console.error("Unable to load marketing content:", error);
+        setShorts([]);
+        setSocialLinks([]);
       } finally {
-        if (isMounted && initialLoad) setIsLoadingShorts(false);
+        setIsLoadingShorts(false);
       }
     };
 
-    void loadMarketingContent(true);
-    const channel = supabase
-      .channel("homepage-marketing-content")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "site_content", filter: "key=eq.marketing_content" },
-        () => void loadMarketingContent(),
-      )
-      .subscribe((status) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.error("Homepage marketing live updates are unavailable:", status);
-        }
-      });
-    return () => {
-      isMounted = false;
-      void supabase.removeChannel(channel);
-    };
+    void loadMarketingContent();
   }, []);
 
   return (
@@ -244,22 +213,19 @@ export default function Hero() {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
         <div className="social-marquee mb-8 sm:mb-10 min-h-[56px] sm:min-h-[68px] w-full overflow-hidden rounded-2xl border border-gold-500/25 bg-dark-900/80 py-2 sm:py-3 shadow-2xl shadow-black/20">
           <div className="social-marquee-track flex w-max items-center gap-2 sm:gap-4 whitespace-nowrap">
-            {([...socialLinks, ...socialLinks]).map(({ id, label, href, platform }, index) => {
-              const Icon = getSocialIcon(platform);
-              return (
-                <a
-                  key={`${id}-${label}-${index}`}
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-2 sm:gap-3 rounded-full border border-white/10 bg-white/[.04] px-3 py-2 text-[11px] sm:px-5 sm:py-3 sm:text-sm font-semibold text-gray-200 transition-colors hover:border-gold-500/60 hover:bg-gold-500/10 hover:text-gold-300"
-                >
-                  <Icon className="h-4 w-4 text-gold-400 sm:h-5 sm:w-5" />
-                  <span>{label}</span>
-                  <span className="text-gold-400">&gt;</span>
-                </a>
-              );
-            })}
+            {([...socialLinks, ...socialLinks]).map(({ label, icon: Icon, href }, index) => (
+              <a
+                key={`${label}-${index}`}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 sm:gap-3 rounded-full border border-white/10 bg-white/[.04] px-3 py-2 text-[11px] sm:px-5 sm:py-3 sm:text-sm font-semibold text-gray-200 transition-colors hover:border-gold-500/60 hover:bg-gold-500/10 hover:text-gold-300"
+              >
+                <Icon className="h-4 w-4 text-gold-400 sm:h-5 sm:w-5" />
+                <span>{label}</span>
+                <span className="text-gold-400">&gt;</span>
+              </a>
+            ))}
           </div>
         </div>
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-12 items-center">

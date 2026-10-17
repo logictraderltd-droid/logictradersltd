@@ -9,10 +9,12 @@ import {
     Settings,
     LogOut,
     X,
+    Award,
     Megaphone,
-    ShieldCheck,
+    PanelsTopLeft,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 interface AdminSidebarProps {
     activeTab: string;
@@ -29,7 +31,8 @@ const menuItems = [
     { id: "orders", label: "Orders", icon: ShoppingCart },
     { id: "signals", label: "Signals", icon: Bell },
     { id: "marketing", label: "Marketing", icon: Megaphone },
-    { id: "cfd_blocker", label: "CFD Blocker", icon: ShieldCheck },
+    { id: "pro-firm", label: "Pro Firm", icon: Award },
+    { id: "content", label: "Platform Content", icon: PanelsTopLeft },
     { id: "settings", label: "Settings", icon: Settings },
 ];
 
