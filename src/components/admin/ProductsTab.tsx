@@ -19,7 +19,7 @@ const formatProductPrice = (price: number, currency?: string) => {
 };
 
 const getProductType = (product: Product | Partial<Product> | null | undefined) =>
-    (product?.type ?? product?.product_type ?? 'course') as Product['type'];
+    (product?.product_type ?? product?.type ?? 'course') as Product['type'];
 
 const isMissingSchemaField = (error: any, field: string) =>
     (error?.code === 'PGRST204' || error?.code === '42703') &&
@@ -209,10 +209,11 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
             if (!Number.isFinite(priceValue) || priceValue < 0) {
                 throw new Error("Invalid price value");
             }
-            if (formData.type === 'signal' && ![30, 365].includes(signalDurationDays)) {
+            const productType = getProductType(formData);
+            if (productType === 'signal' && ![30, 365].includes(signalDurationDays)) {
                 throw new Error("Signal plans must grant 30 or 365 days of access.");
             }
-            if (formData.type === 'course' && isFreeCourse && priceValue !== 0) {
+            if (productType === 'course' && isFreeCourse && priceValue !== 0) {
                 throw new Error("Free courses must have a price of $0.");
             }
 
@@ -221,7 +222,6 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 throw new Error("Thumbnail cannot be a pasted image (Base64). Please use the 'Upload' button or a direct https:// link.");
             }
 
-            const productType = getProductType(formData);
             if (productType === 'bot' && botDeliveryMethod === 'automatic_download' && !downloadUrl.trim()) {
                 throw new Error("Automatic bot delivery requires a downloadable file URL.");
             }
@@ -241,17 +241,25 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
 
             const metadata: Record<string, any> = {
                 ...(editingProduct?.metadata || {}),
-                is_free: formData.type === 'course' && isFreeCourse,
-                level: formData.type === 'course' ? level : (editingProduct?.metadata?.level ?? level),
-                delivery_method: formData.type === 'bot' ? botDeliveryMethod : (editingProduct?.metadata?.delivery_method ?? null),
-                bot_type: formData.type === 'bot' ? botType.trim() : (editingProduct?.metadata?.bot_type ?? null),
-                demo_video_url: formData.type === 'bot' ? botVideoUrl.trim() : (editingProduct?.metadata?.demo_video_url ?? null),
-                duration_days: formData.type === 'signal' ? signalDurationDays : (editingProduct?.metadata?.duration_days ?? null),
-                interval: formData.type === 'signal' ? (signalDurationDays === 365 ? 'year' : 'month') : (editingProduct?.metadata?.interval ?? null),
+                is_free: productType === 'course' && isFreeCourse,
+                level: productType === 'course' ? level : (editingProduct?.metadata?.level ?? level),
+                delivery_method: productType === 'bot' ? botDeliveryMethod : (editingProduct?.metadata?.delivery_method ?? null),
+                bot_type: productType === 'bot' ? botType.trim() : (editingProduct?.metadata?.bot_type ?? null),
+                demo_video_url: productType === 'bot' ? botVideoUrl.trim() : (editingProduct?.metadata?.demo_video_url ?? null),
+                duration_days: productType === 'signal' ? signalDurationDays : (editingProduct?.metadata?.duration_days ?? null),
+                interval: productType === 'signal' ? (signalDurationDays === 365 ? 'year' : 'month') : (editingProduct?.metadata?.interval ?? null),
                 students: studentsCount,
                 rating,
                 requirements,
             };
+
+            const { error: productTypeColumnError } = await supabase
+                .from("products")
+                .select("type")
+                .limit(0);
+            if (productTypeColumnError && !isMissingSchemaField(productTypeColumnError, "type")) {
+                throw productTypeColumnError;
+            }
 
             const productPayload: Record<string, any> = {
                 name: formData.name,
@@ -262,18 +270,19 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 thumbnail_url: formData.thumbnail_url || null,
                 metadata,
             };
+            if (!productTypeColumnError) productPayload.type = productType;
 
             // Add type-specific fields
-            if (formData.type === 'course') {
+            if (productType === 'course') {
                 metadata.video_url = videoUrl;
                 metadata.level = level;
                 metadata.duration = duration;
                 metadata.instructor = instructor;
                 metadata.lessons = lessonsCount;
                 metadata.what_you_learn = listItems;
-            } else if (formData.type === 'bot') {
+            } else if (productType === 'bot') {
                 metadata.features = listItems;
-            } else if (formData.type === 'signal') {
+            } else if (productType === 'signal') {
                 metadata.features = listItems;
             }
 
