@@ -30,6 +30,11 @@ function getVideoEmbedUrl(url: string) {
   return null;
 }
 
+function isHostedVideoUrl(url: string) {
+  return /\.(mp4|webm|mov|m3u8)(?:[?#]|$)/i.test(url) ||
+    /cloudinary\.com\/.*\/video\/upload\//i.test(url);
+}
+
 function isSafeExternalUrl(url: string) {
   try {
     return ["http:", "https:"].includes(new URL(url).protocol);
@@ -53,16 +58,14 @@ export default function PlatformListings({
     const loadListings = async () => {
       try {
         const { data, error } = await createBrowserClient()
-          .from("site_content")
-          .select("value")
-          .eq("key", contentKey)
-          .maybeSingle();
+          .from("platform_listings")
+          .select("id,title,image_url,video_url,description,affiliate_url,published,sort_order")
+          .eq("section_key", contentKey)
+          .eq("published", true)
+          .order("sort_order", { ascending: true });
         if (error) throw error;
         if (!cancelled) {
-          const records = Array.isArray(data?.value?.items) ? data.value.items : [];
-          setItems(records
-            .filter((item: PlatformListing) => item.published)
-            .sort((a: PlatformListing, b: PlatformListing) => a.sort_order - b.sort_order));
+          setItems((data || []) as PlatformListing[]);
         }
       } catch (error) {
         console.error(`Unable to load ${contentKey}:`, error);
@@ -92,9 +95,19 @@ export default function PlatformListings({
             <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {items.map((item) => {
                 const videoEmbed = item.video_url ? getVideoEmbedUrl(item.video_url) : null;
+                const hostedVideo = item.video_url && isSafeExternalUrl(item.video_url) && isHostedVideoUrl(item.video_url);
                 return (
                   <article key={item.id} className="dark-card overflow-hidden">
-                    {videoEmbed ? (
+                    {hostedVideo ? (
+                      <video
+                        src={item.video_url}
+                        poster={item.image_url || undefined}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="aspect-video w-full bg-black object-contain"
+                      />
+                    ) : videoEmbed ? (
                       <div className="aspect-video bg-black">
                         <iframe src={videoEmbed} title={`${item.title} video`} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
                       </div>

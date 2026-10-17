@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Save, Trash2, Upload } from "lucide-react";
 import { CldUploadWidget } from "next-cloudinary";
 import { createBrowserClient } from "@/lib/supabase";
@@ -35,11 +35,15 @@ function validOptionalUrl(value: string) {
 export function PlatformContentTab() {
   const [sectionKey, setSectionKey] = useState<string>(contentSections[0].key);
   const [items, setItems] = useState<PlatformListing[]>([]);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
   const [communityUrl, setCommunityUrl] = useState("");
   const [vipUrl, setVipUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [isSavingLinks, setIsSavingLinks] = useState(false);
   const [notice, setNotice] = useState("");
+  const isListingOperationPendingRef = useRef(false);
 
   const section = contentSections.find((entry) => entry.key === sectionKey) ?? contentSections[0];
 
@@ -48,16 +52,26 @@ export function PlatformContentTab() {
     const load = async () => {
       setIsLoading(true);
       setNotice("");
+      setItems([]);
+      setSavedIds(new Set());
+      setDirtyIds(new Set());
       try {
         const supabase = createBrowserClient();
-        const { data, error } = await supabase.from("site_content").select("value").eq("key", sectionKey).maybeSingle();
+        const { data, error } = await supabase
+          .from("platform_listings")
+          .select("id,title,image_url,video_url,description,affiliate_url,published,sort_order")
+          .eq("section_key", sectionKey)
+          .order("sort_order", { ascending: true });
         if (error) throw error;
         if (!cancelled) {
-          setItems(Array.isArray(data?.value?.items) ? data.value.items : []);
+          const loadedItems = (data || []) as PlatformListing[];
+          setItems(loadedItems);
+          setSavedIds(new Set(loadedItems.map((item) => item.id)));
+          setDirtyIds(new Set());
         }
       } catch (error) {
         console.error("Unable to load platform content:", error);
-        if (!cancelled) setNotice("Could not load this section. Check its Supabase permissions.");
+        if (!cancelled) setNotice(`Could not load this section: ${error instanceof Error ? error.message : "Check Supabase permissions and migration status."}`);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -89,26 +103,90 @@ export function PlatformContentTab() {
     return () => { cancelled = true; };
   }, []);
 
-  const saveListings = async (event: FormEvent) => {
-    event.preventDefault();
-    if (items.some((item) => !item.title.trim() || !validOptionalUrl(item.image_url) || !validOptionalUrl(item.video_url) || !validOptionalUrl(item.affiliate_url))) {
+  const saveListing = async (item: PlatformListing) => {
+    if (isListingOperationPendingRef.current) return;
+    if (!item.title.trim() || !validOptionalUrl(item.image_url) || !validOptionalUrl(item.video_url) || !validOptionalUrl(item.affiliate_url)) {
       setNotice("Each listing needs a title. Image, video, and affiliate links must be valid HTTP(S) URLs.");
       return;
     }
-    setIsSaving(true);
+    isListingOperationPendingRef.current = true;
+    setSavingId(item.id);
     setNotice("");
     try {
-      const { error } = await createBrowserClient().from("site_content").upsert(
-        { key: sectionKey, value: { items }, updated_at: new Date().toISOString() },
-        { onConflict: "key" },
-      );
+      const { data, error } = await createBrowserClient()
+        .from("platform_listings")
+        .upsert(
+          {
+            ...item,
+            section_key: sectionKey,
+            title: item.title.trim(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "section_key,id" },
+        )
+        .select("id,section_key")
+        .single();
       if (error) throw error;
-      setNotice("Content saved.");
+      if (data?.id !== item.id || data.section_key !== sectionKey) {
+        throw new Error("Supabase did not confirm the listing save.");
+      }
+      setSavedIds((current) => new Set(current).add(item.id));
+      setDirtyIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+      setNotice("Listing saved.");
     } catch (error) {
       console.error("Unable to save platform content:", error);
-      setNotice("Could not save content. Check that the Supabase migration and admin policies are applied.");
+      setNotice(`Could not save listing. Your edits are still here. ${error instanceof Error ? error.message : "Check that the platform listings migration is applied."}`);
     } finally {
-      setIsSaving(false);
+      isListingOperationPendingRef.current = false;
+      setSavingId(null);
+    }
+  };
+
+  const removeListing = async (item: PlatformListing) => {
+    if (isListingOperationPendingRef.current) return;
+    if (!savedIds.has(item.id)) {
+      setItems((current) => current.filter((entry) => entry.id !== item.id));
+      setDirtyIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+      return;
+    }
+
+    isListingOperationPendingRef.current = true;
+    setSavingId(item.id);
+    setNotice("");
+    try {
+      const { error } = await createBrowserClient()
+        .from("platform_listings")
+        .delete()
+        .eq("section_key", sectionKey)
+        .eq("id", item.id)
+        .select("id");
+      if (error) throw error;
+      setItems((current) => current.filter((entry) => entry.id !== item.id));
+      setSavedIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+      setDirtyIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+      setNotice("Listing deleted.");
+    } catch (error) {
+      console.error("Unable to delete platform listing:", error);
+      setNotice(`Could not delete listing. ${error instanceof Error ? error.message : "Check the platform listings migration and admin policy."}`);
+    } finally {
+      isListingOperationPendingRef.current = false;
+      setSavingId(null);
     }
   };
 
@@ -117,7 +195,7 @@ export function PlatformContentTab() {
       setNotice("Telegram destinations must be valid HTTP(S) URLs.");
       return;
     }
-    setIsSaving(true);
+    setIsSavingLinks(true);
     setNotice("");
     try {
       const supabase = createBrowserClient();
@@ -138,12 +216,13 @@ export function PlatformContentTab() {
       console.error("Unable to save signal links:", error);
       setNotice("Could not save signal links. Check the Supabase admin policy.");
     } finally {
-      setIsSaving(false);
+      setIsSavingLinks(false);
     }
   };
 
   const updateItem = (id: string, patch: Partial<PlatformListing>) => {
     setItems((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
+    setDirtyIds((current) => new Set(current).add(id));
   };
 
   return (
@@ -155,22 +234,33 @@ export function PlatformContentTab() {
 
       <div className="flex flex-wrap gap-2">
         {contentSections.map((entry) => (
-          <button key={entry.key} type="button" onClick={() => setSectionKey(entry.key)} className={`rounded-lg px-4 py-2 text-sm font-medium ${sectionKey === entry.key ? "bg-gold-500 text-dark-950" : "bg-dark-800 text-gray-300"}`}>
+          <button key={entry.key} type="button" disabled={Boolean(savingId)} onClick={() => setSectionKey(entry.key)} className={`rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 ${sectionKey === entry.key ? "bg-gold-500 text-dark-950" : "bg-dark-800 text-gray-300"}`}>
             {entry.title}
           </button>
         ))}
       </div>
 
-      <form onSubmit={saveListings} className="space-y-5">
+      <section className="space-y-5">
         <div className="flex items-center justify-between gap-4">
           <div><h3 className="text-xl font-semibold text-white">{section.title}</h3><p className="text-sm text-gray-400">{section.description}</p></div>
-          <button type="button" onClick={() => setItems((current) => [...current, blankListing()])} className="inline-flex items-center gap-2 rounded-lg bg-dark-800 px-4 py-2 text-sm text-white hover:bg-dark-700"><Plus className="h-4 w-4" /> Add listing</button>
+          <button type="button" disabled={Boolean(savingId) || isLoading} onClick={() => {
+            const newListing = blankListing();
+            setItems((current) => [...current, newListing]);
+            setDirtyIds((current) => new Set(current).add(newListing.id));
+          }} className="inline-flex items-center gap-2 rounded-lg bg-dark-800 px-4 py-2 text-sm text-white hover:bg-dark-700 disabled:opacity-50"><Plus className="h-4 w-4" /> Add listing</button>
         </div>
         {isLoading ? <div className="spinner" /> : items.map((item) => (
-          <div key={item.id} className="dark-card space-y-4 p-5">
+          <fieldset key={item.id} disabled={savingId === item.id} className="dark-card min-w-0 space-y-4 p-5">
             <div className="flex justify-between gap-3">
               <h4 className="font-semibold text-white">{item.title || "New listing"}</h4>
-              <button type="button" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))} className="text-red-400" aria-label={`Remove ${item.title || "listing"}`}><Trash2 className="h-4 w-4" /></button>
+              <div className="flex items-center gap-3">
+                {dirtyIds.has(item.id) && (
+                  <button type="button" disabled={Boolean(savingId)} onClick={() => void saveListing(item)} className="inline-flex items-center gap-2 rounded-lg bg-gold-500 px-3 py-2 text-sm font-semibold text-dark-950 disabled:opacity-50">
+                    <Save className="h-4 w-4" />{savingId === item.id ? "Saving..." : savedIds.has(item.id) ? "Save changes" : "Create listing"}
+                  </button>
+                )}
+                <button type="button" disabled={Boolean(savingId)} onClick={() => void removeListing(item)} className="text-red-400 disabled:opacity-50" aria-label={`Delete ${item.title || "listing"}`}><Trash2 className="h-4 w-4" /></button>
+              </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1 text-sm text-gray-400">Name / title<input value={item.title} onChange={(event) => updateItem(item.id, { title: event.target.value })} className="dark-input w-full" required /></label>
@@ -197,20 +287,19 @@ export function PlatformContentTab() {
               <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={item.published} onChange={(event) => updateItem(item.id, { published: event.target.checked })} /> Published on the public site</label>
             </div>
             <label className="block space-y-1 text-sm text-gray-400">Description<textarea value={item.description} onChange={(event) => updateItem(item.id, { description: event.target.value })} className="dark-input min-h-24 w-full" /></label>
-          </div>
+          </fieldset>
         ))}
         {!isLoading && items.length === 0 && <p className="rounded-xl border border-dashed border-dark-700 p-8 text-center text-gray-500">No listings yet. Add a listing to publish content here.</p>}
         <div className="flex items-center gap-4">
-          <button type="submit" disabled={isSaving || isLoading} className="gold-button inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4" />{isSaving ? "Saving..." : "Save listings"}</button>
           {notice && <p role="status" className="text-sm text-gray-300">{notice}</p>}
         </div>
-      </form>
+      </section>
 
       <section className="dark-card space-y-4 p-5">
         <div><h3 className="text-xl font-semibold text-white">Signals community links</h3><p className="text-sm text-gray-400">Public community and paid VIP destinations. VIP link is only shown to users with current access.</p></div>
         <label className="block space-y-1 text-sm text-gray-400">Public Telegram community URL<input type="url" value={communityUrl} onChange={(event) => setCommunityUrl(event.target.value)} className="dark-input w-full" placeholder="https://t.me/..." /></label>
         <label className="block space-y-1 text-sm text-gray-400">VIP Telegram community URL<input type="url" value={vipUrl} onChange={(event) => setVipUrl(event.target.value)} className="dark-input w-full" placeholder="https://t.me/..." /></label>
-        <button type="button" onClick={saveSignalLinks} disabled={isSaving} className="gold-button inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4" /> Save community links</button>
+        <button type="button" onClick={saveSignalLinks} disabled={isSavingLinks} className="gold-button inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4" />{isSavingLinks ? "Saving..." : "Save community links"}</button>
       </section>
     </div>
   );

@@ -245,6 +245,27 @@ CREATE TABLE site_content (
 
 CREATE INDEX idx_site_content_key ON site_content(key);
 
+-- Individual public provider and firm listings managed by Platform Content.
+CREATE TABLE platform_listings (
+  section_key TEXT NOT NULL CHECK (
+    section_key IN ('cfd_blocker_content', 'pro_firm_listings', 'copy_trading_content')
+  ),
+  id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  image_url TEXT NOT NULL DEFAULT '',
+  video_url TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  affiliate_url TEXT NOT NULL DEFAULT '',
+  published BOOLEAN NOT NULL DEFAULT FALSE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (section_key, id)
+);
+
+CREATE INDEX idx_platform_listings_section_published_order
+  ON platform_listings (section_key, published, sort_order);
+
 -- ============================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================
@@ -262,6 +283,7 @@ ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_access ENABLE ROW LEVEL SECURITY;
 ALTER TABLE site_content ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform_listings ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN
@@ -413,6 +435,18 @@ CREATE POLICY "Admin can manage site content" ON site_content
     EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
   );
 
+CREATE POLICY "Public can view published platform listings" ON platform_listings
+  FOR SELECT TO anon, authenticated
+  USING (published = TRUE);
+
+CREATE POLICY "Admins can manage platform listings" ON platform_listings
+  FOR ALL TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+GRANT SELECT ON platform_listings TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON platform_listings TO authenticated;
+
 -- ============================================
 -- FUNCTIONS & TRIGGERS
 -- ============================================
@@ -449,6 +483,9 @@ CREATE TRIGGER update_user_access_updated_at BEFORE UPDATE ON user_access
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_site_content_updated_at BEFORE UPDATE ON site_content
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_platform_listings_updated_at BEFORE UPDATE ON platform_listings
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to grant access after successful payment
