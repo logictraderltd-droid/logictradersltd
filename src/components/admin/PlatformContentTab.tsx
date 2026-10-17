@@ -35,6 +35,7 @@ function validOptionalUrl(value: string) {
 export function PlatformContentTab() {
   const [sectionKey, setSectionKey] = useState<string>(contentSections[0].key);
   const [items, setItems] = useState<PlatformListing[]>([]);
+  const [editorId, setEditorId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
   const [communityUrl, setCommunityUrl] = useState("");
@@ -53,6 +54,7 @@ export function PlatformContentTab() {
       setIsLoading(true);
       setNotice("");
       setItems([]);
+      setEditorId(null);
       setSavedIds(new Set());
       setDirtyIds(new Set());
       try {
@@ -137,6 +139,7 @@ export function PlatformContentTab() {
         return next;
       });
       setNotice("Listing saved.");
+      setEditorId(null);
     } catch (error) {
       console.error("Unable to save platform content:", error);
       setNotice(`Could not save listing. Your edits are still here. ${error instanceof Error ? error.message : "Check that the platform listings migration is applied."}`);
@@ -234,7 +237,7 @@ export function PlatformContentTab() {
 
       <div className="flex flex-wrap gap-2">
         {contentSections.map((entry) => (
-          <button key={entry.key} type="button" disabled={Boolean(savingId)} onClick={() => setSectionKey(entry.key)} className={`rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 ${sectionKey === entry.key ? "bg-gold-500 text-dark-950" : "bg-dark-800 text-gray-300"}`}>
+          <button key={entry.key} type="button" disabled={Boolean(savingId) || editorId !== null} onClick={() => setSectionKey(entry.key)} className={`rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 ${sectionKey === entry.key ? "bg-gold-500 text-dark-950" : "bg-dark-800 text-gray-300"}`}>
             {entry.title}
           </button>
         ))}
@@ -243,10 +246,11 @@ export function PlatformContentTab() {
       <section className="space-y-5">
         <div className="flex items-center justify-between gap-4">
           <div><h3 className="text-xl font-semibold text-white">{section.title}</h3><p className="text-sm text-gray-400">{section.description}</p></div>
-          <button type="button" disabled={Boolean(savingId) || isLoading} onClick={() => {
+          <button type="button" disabled={Boolean(savingId) || isLoading || editorId !== null} onClick={() => {
             const newListing = blankListing();
             setItems((current) => [...current, newListing]);
             setDirtyIds((current) => new Set(current).add(newListing.id));
+            setEditorId(newListing.id);
           }} className="inline-flex items-center gap-2 rounded-lg bg-dark-800 px-4 py-2 text-sm text-white hover:bg-dark-700 disabled:opacity-50"><Plus className="h-4 w-4" /> Add listing</button>
         </div>
         {isLoading ? <div className="spinner" /> : items.map((item) => (
@@ -259,9 +263,28 @@ export function PlatformContentTab() {
                     <Save className="h-4 w-4" />{savingId === item.id ? "Saving..." : savedIds.has(item.id) ? "Save changes" : "Create listing"}
                   </button>
                 )}
+                {savedIds.has(item.id) && editorId !== item.id && (
+                  <button type="button" disabled={Boolean(savingId) || editorId !== null} onClick={() => setEditorId(item.id)} className="rounded-lg border border-dark-700 px-3 py-2 text-sm text-gray-300 hover:text-white disabled:opacity-50">Edit</button>
+                )}
+                {editorId === item.id && !savedIds.has(item.id) && (
+                  <button type="button" disabled={Boolean(savingId)} onClick={() => {
+                    setItems((current) => current.filter((entry) => entry.id !== item.id));
+                    setDirtyIds((current) => {
+                      const next = new Set(current);
+                      next.delete(item.id);
+                      return next;
+                    });
+                    setEditorId(null);
+                  }} className="rounded-lg border border-dark-700 px-3 py-2 text-sm text-gray-300 hover:text-white disabled:opacity-50">Cancel</button>
+                )}
+                {savedIds.has(item.id) && editorId === item.id && (
+                  <button type="button" disabled={Boolean(savingId)} onClick={() => setEditorId(null)} className="rounded-lg border border-dark-700 px-3 py-2 text-sm text-gray-300 hover:text-white disabled:opacity-50">Close</button>
+                )}
                 <button type="button" disabled={Boolean(savingId)} onClick={() => void removeListing(item)} className="text-red-400 disabled:opacity-50" aria-label={`Delete ${item.title || "listing"}`}><Trash2 className="h-4 w-4" /></button>
               </div>
             </div>
+            {editorId === item.id ? (
+            <>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1 text-sm text-gray-400">Name / title<input value={item.title} onChange={(event) => updateItem(item.id, { title: event.target.value })} className="dark-input w-full" required /></label>
               <div className="space-y-1 text-sm text-gray-400">
@@ -287,6 +310,17 @@ export function PlatformContentTab() {
               <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={item.published} onChange={(event) => updateItem(item.id, { published: event.target.checked })} /> Published on the public site</label>
             </div>
             <label className="block space-y-1 text-sm text-gray-400">Description<textarea value={item.description} onChange={(event) => updateItem(item.id, { description: event.target.value })} className="dark-input min-h-24 w-full" /></label>
+            </>
+            ) : (
+              <div className="space-y-2 text-sm text-gray-400">
+                {item.description && <p className="line-clamp-2">{item.description}</p>}
+                {item.video_url && <p className="truncate">Video: {item.video_url}</p>}
+                {item.image_url && <p className="truncate">Profile: {item.image_url}</p>}
+                {item.affiliate_url && <p className="truncate">Affiliate: {item.affiliate_url}</p>}
+                <p>{item.published ? "Published" : "Draft"} · Order {item.sort_order}</p>
+                {dirtyIds.has(item.id) && <p className="text-amber-300">Unsaved edits</p>}
+              </div>
+            )}
           </fieldset>
         ))}
         {!isLoading && items.length === 0 && <p className="rounded-xl border border-dashed border-dark-700 p-8 text-center text-gray-500">No listings yet. Add a listing to publish content here.</p>}
