@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, X, Check, Upload, AlertCircle, Loader2, Package, Video, Bot, LineChart, Link as LinkIcon, Download as DownloadIcon, Play, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Edit, Archive, Trash2, X, Check, Upload, AlertCircle, Loader2, Package, Video, Bot, LineChart, Link as LinkIcon, Download as DownloadIcon, Play, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { CldUploadWidget } from 'next-cloudinary';
 import { Product } from "@/types";
 import { createBrowserClient } from "@/lib/supabase";
@@ -429,15 +429,15 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
         const supabase = createBrowserClient();
 
         try {
-            console.log("Deleting product:", productToDelete.id);
+            console.log("Deactivating product:", productToDelete.id);
             const { error } = await supabase
                 .from("products")
-                .delete()
+                .update({ is_active: false })
                 .eq("id", productToDelete.id);
 
             if (error) throw error;
 
-            setNotification({ type: 'success', message: 'Product deleted successfully' });
+            setNotification({ type: 'success', message: 'Product deactivated. Existing orders and payment records were preserved. You can reactivate it by editing the product.' });
             setIsDeleteModalOpen(false);
             onRefresh();
         } catch (error: any) {
@@ -609,7 +609,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 {[
                     { label: 'Total', value: stats.total, color: 'text-gray-400' },
                     { label: 'Active', value: stats.active, color: 'text-green-400' },
-                    { label: 'Draft', value: stats.draft, color: 'text-amber-400' },
+                    { label: 'Inactive', value: stats.draft, color: 'text-amber-400' },
                     { label: 'Courses', value: stats.courses, color: 'text-purple-400' },
                     { label: 'Bots', value: stats.bots, color: 'text-blue-400' },
                     { label: 'Signals', value: stats.signals, color: 'text-gold-400' },
@@ -651,7 +651,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                     >
                         <option value="all">All Status</option>
                         <option value="active">Active</option>
-                        <option value="draft">Draft</option>
+                        <option value="draft">Inactive</option>
                     </select>
                     <select
                         value={sortBy}
@@ -700,7 +700,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                     : "bg-gray-500/20 text-gray-300 border-gray-500/30"
                                     }`}>
                                     <span className={`w-1.5 h-1.5 rounded-full ${product.is_active ? "bg-green-400 animate-pulse" : "bg-gray-400"}`}></span>
-                                    {product.is_active ? "Active" : "Draft"}
+                                    {product.is_active ? "Active" : "Inactive"}
                                 </div>
                             </div>
                         </div>
@@ -753,11 +753,11 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                     </button>
                                     <button
                                         onClick={() => handleDeleteClick(product)}
-                                        className="p-2 rounded-lg bg-dark-800 hover:bg-red-500 hover:text-white text-gray-400 transition-all border border-dark-700 hover:border-red-500"
-                                        title="Delete"
-                                        aria-label="Delete product"
+                                        className="p-2 rounded-lg bg-dark-800 hover:bg-amber-500 hover:text-dark-950 text-gray-400 transition-all border border-dark-700 hover:border-amber-500"
+                                        title="Deactivate"
+                                        aria-label="Deactivate product"
                                     >
-                                        <Trash2 className="w-4 h-4" />
+                                        <Archive className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
@@ -1267,13 +1267,13 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                 isDeleteModalOpen && productToDelete && (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                         <div className="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center space-y-4">
-                            <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto text-red-500">
-                                <Trash2 className="w-6 h-6" />
+                            <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto text-amber-400">
+                                <Archive className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-white">Delete Product?</h3>
+                                <h3 className="text-xl font-bold text-white">Deactivate Product?</h3>
                                 <p className="text-gray-400 mt-2 text-sm">
-                                    Are you sure you want to delete <span className="text-white font-bold">"{productToDelete.name}"</span>? This action cannot be undone.
+                                    Deactivate <span className="text-white font-bold">"{productToDelete.name}"</span>? It will no longer be offered for purchase. Existing orders and payment records will be kept, and you can reactivate it by editing the product.
                                 </p>
                             </div>
                             <div className="flex gap-3 pt-4">
@@ -1286,9 +1286,9 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                                 <button
                                     onClick={handleDeleteConfirm}
                                     disabled={isLoading}
-                                    className="flex-1 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-colors flex items-center justify-center gap-2"
+                                    className="flex-1 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-dark-950 font-bold transition-colors flex items-center justify-center gap-2"
                                 >
-                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Deactivate"}
                                 </button>
                             </div>
                         </div>
