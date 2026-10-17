@@ -254,9 +254,22 @@ export function PlatformContentTab() {
           }} className="inline-flex items-center gap-2 rounded-lg bg-dark-800 px-4 py-2 text-sm text-white hover:bg-dark-700 disabled:opacity-50"><Plus className="h-4 w-4" /> Add listing</button>
         </div>
         {isLoading ? <div className="spinner" /> : items.map((item) => (
-          <fieldset key={item.id} disabled={savingId === item.id} className="dark-card min-w-0 space-y-4 p-5">
-            <div className="flex justify-between gap-3">
-              <h4 className="font-semibold text-white">{item.title || "New listing"}</h4>
+          <fieldset
+            key={item.id}
+            disabled={savingId === item.id}
+            className={editorId === item.id
+              ? "dark-card min-w-0 space-y-4 p-5"
+              : "flex min-w-0 items-center justify-between gap-3 rounded-xl border border-dark-800 bg-dark-900/60 px-3 py-2"}
+          >
+            <div className={`flex min-w-0 items-center justify-between gap-3 ${editorId === item.id ? "" : "w-full"}`}>
+              <div className="flex min-w-0 items-center gap-2">
+                <h4 className={`truncate text-white ${editorId === item.id ? "font-semibold" : "text-sm font-medium"}`}>{item.title || "New listing"}</h4>
+                {editorId !== item.id && (
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${item.published ? "bg-green-500/10 text-green-400" : "bg-dark-800 text-gray-400"}`}>
+                    {item.published ? "Published" : "Draft"}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-3">
                 {dirtyIds.has(item.id) && (
                   <button type="button" disabled={Boolean(savingId)} onClick={() => void saveListing(item)} className="inline-flex items-center gap-2 rounded-lg bg-gold-500 px-3 py-2 text-sm font-semibold text-dark-950 disabled:opacity-50">
@@ -312,14 +325,7 @@ export function PlatformContentTab() {
             <label className="block space-y-1 text-sm text-gray-400">Description<textarea value={item.description} onChange={(event) => updateItem(item.id, { description: event.target.value })} className="dark-input min-h-24 w-full" /></label>
             </>
             ) : (
-              <div className="space-y-2 text-sm text-gray-400">
-                {item.description && <p className="line-clamp-2">{item.description}</p>}
-                {item.video_url && <p className="truncate">Video: {item.video_url}</p>}
-                {item.image_url && <p className="truncate">Profile: {item.image_url}</p>}
-                {item.affiliate_url && <p className="truncate">Affiliate: {item.affiliate_url}</p>}
-                <p>{item.published ? "Published" : "Draft"} · Order {item.sort_order}</p>
-                {dirtyIds.has(item.id) && <p className="text-amber-300">Unsaved edits</p>}
-              </div>
+              dirtyIds.has(item.id) && <p className="px-2 text-xs text-amber-300">Unsaved edits</p>
             )}
           </fieldset>
         ))}
