@@ -84,7 +84,7 @@ export default function Footer() {
               </div>
               <div className="flex items-center space-x-3 text-sm text-gray-400">
                 <MapPin className="w-4 h-4 text-gold-400" />
-                <span>Kigali - Ruhengeri Rd</span>
+                <span>Kigali</span>
               </div>
             </div>
           </div>
