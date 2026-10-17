@@ -32,25 +32,32 @@ async function fetchAdminOrders(
   const orders = rows || [];
   const productIds = Array.from(new Set(orders.map((order) => order.product_id).filter(Boolean)));
   const userIds = Array.from(new Set(orders.map((order) => order.user_id).filter(Boolean)));
-  const [productsResult, usersResult] = await Promise.all([
+  const [productsResult, usersResult, manualPaymentsResult] = await Promise.all([
     productIds.length
       ? supabase.from("products").select("id, name, product_type, currency").in("id", productIds)
       : Promise.resolve({ data: [], error: null }),
     userIds.length
       ? supabase.from("users").select("id, email, full_name").in("id", userIds)
       : Promise.resolve({ data: [], error: null }),
+    orders.length
+      ? supabase.from("manual_payment_requests").select("order_id, status, method").in("order_id", orders.map((order) => order.id))
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (productsResult.error) throw productsResult.error;
   if (usersResult.error) throw usersResult.error;
+  if (manualPaymentsResult.error) throw manualPaymentsResult.error;
 
   const productsById = new Map((productsResult.data || []).map((product) => [product.id, product]));
   const usersById = new Map((usersResult.data || []).map((user) => [user.id, user]));
+  const manualPaymentsByOrderId = new Map((manualPaymentsResult.data || []).map((payment) => [payment.order_id, payment]));
 
   return normalizeOrderRows(orders.map((order) => ({
     ...order,
     product: productsById.get(order.product_id) || null,
     user: usersById.get(order.user_id) || null,
+    manual_payment_status: manualPaymentsByOrderId.get(order.id)?.status,
+    manual_payment_method: manualPaymentsByOrderId.get(order.id)?.method,
   })));
 }
 

@@ -107,6 +107,8 @@ export interface Order {
   delivery_status?: string | null;
   status: 'pending' | 'completed' | 'failed' | 'refunded';
   payment_method?: string;
+  manual_payment_status?: 'pending' | 'verifying' | 'paid' | 'rejected';
+  manual_payment_method?: 'mobile_money' | 'binance';
   manual_payment_request?: {
     id: string;
     method: 'mobile_money' | 'binance';

@@ -170,7 +170,10 @@ export function OrdersTab({ orders, loadError, onRefresh }: OrdersTabProps) {
             email.toLowerCase().includes(searchLower) ||
             productName.toLowerCase().includes(searchLower);
 
-        const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+        const matchesStatus = statusFilter === "all"
+            || order.status === statusFilter
+            || (statusFilter === "needs_review" &&
+                (order.manual_payment_status === "pending" || order.manual_payment_status === "verifying"));
 
         return matchesSearch && matchesStatus;
     });
@@ -244,6 +247,7 @@ export function OrdersTab({ orders, loadError, onRefresh }: OrdersTabProps) {
                         <option value="all">All Statuses</option>
                         <option value="completed">Completed</option>
                         <option value="pending">Pending</option>
+                        <option value="needs_review">Manual payment needs review</option>
                         <option value="failed">Failed</option>
                     </select>
                 </div>
@@ -268,6 +272,22 @@ export function OrdersTab({ orders, loadError, onRefresh }: OrdersTabProps) {
                                 {order.status}
                             </span>
                         </div>
+                        {order.manual_payment_status && (
+                            <div className="mb-3 flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                                <span className="text-xs text-amber-200">
+                                    Manual payment · {order.manual_payment_status}
+                                </span>
+                                {["pending", "verifying"].includes(order.manual_payment_status) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedOrder(order)}
+                                        className="text-xs font-semibold text-gold-300 underline underline-offset-2"
+                                    >
+                                        Review
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                         <div className="space-y-3 mb-4">
                             <div className="flex items-center gap-3">
@@ -439,6 +459,16 @@ export function OrdersTab({ orders, loadError, onRefresh }: OrdersTabProps) {
                                                         </button>
                                                     </div>
                                                 </div>
+                                            )}
+                                            {manualPayment.status === 'verifying' && (
+                                                <p className="border-t border-dark-700 pt-3 text-xs text-amber-200">
+                                                    Verification is in progress. Refresh the order shortly before trying another action.
+                                                </p>
+                                            )}
+                                            {manualPayment.status === 'paid' && (
+                                                <p className="border-t border-dark-700 pt-3 text-xs text-green-300">
+                                                    Approved. Course or product access has been granted.
+                                                </p>
                                             )}
                                             {manualPaymentError && <p role="alert" className="text-red-300">{manualPaymentError}</p>}
                                         </div>
