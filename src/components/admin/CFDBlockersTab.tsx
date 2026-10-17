@@ -66,6 +66,12 @@ function matchesSavedData(item: CFDBlocker, form: BlockerForm) {
     item.sort_order === form.sort_order;
 }
 
+function isUncertainWriteError(error: unknown) {
+  if (error instanceof SaveTimeoutError) return true;
+  if (error instanceof TypeError) return true;
+  return error instanceof Error && error.name === "AbortError";
+}
+
 function validOptionalUrl(value: string) {
   if (!value.trim()) return true;
   try {
@@ -87,6 +93,7 @@ export function CFDBlockersTab() {
   const [form, setForm] = useState<BlockerForm | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isVerifyingSave, setIsVerifyingSave] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const savingRef = useRef(false);
@@ -148,34 +155,46 @@ export function CFDBlockersTab() {
 
     savingRef.current = true;
     setIsSaving(true);
+    setIsVerifyingSave(false);
     setNotice("");
     try {
-      const payload = { ...normalized, updated_at: new Date().toISOString() };
+      const now = new Date().toISOString();
+      const previousItem = items.find((item) => item.id === normalized.id);
+      const payload = { ...normalized, updated_at: now };
       const supabase = createBrowserClient();
-      let data: CFDBlocker | null = null;
+      let data: CFDBlocker;
       try {
         const result = await withRequestTimeout((signal) =>
           supabase
             .from("cfd_blockers")
             .upsert(payload, { onConflict: "id" })
-            .abortSignal(signal)
-            .select("*")
-            .single(),
-        20_000);
+            .abortSignal(signal),
+        15_000);
         if (result.error) throw result.error;
-        data = result.data as CFDBlocker;
+        data = { ...payload, created_at: previousItem?.created_at ?? now };
       } catch (saveError) {
-        if (!(saveError instanceof SaveTimeoutError)) throw saveError;
-        const reconciliation = await withRequestTimeout((signal) =>
-          supabase
-            .from("cfd_blockers")
-            .select("*")
-            .eq("id", normalized.id)
-            .abortSignal(signal)
-            .maybeSingle(),
-        8_000);
+        if (!isUncertainWriteError(saveError)) throw saveError;
+        setIsVerifyingSave(true);
+        setNotice("The save response was delayed. Checking whether the database completed the save…");
+        let reconciliation;
+        try {
+          reconciliation = await withRequestTimeout((signal) =>
+            supabase
+              .from("cfd_blockers")
+              .select("*")
+              .eq("id", normalized.id)
+              .abortSignal(signal)
+              .maybeSingle(),
+          5_000);
+        } catch (verificationError) {
+          throw new Error(
+            `The save outcome could not be verified. The server may have saved it. Keep this form open and retry; the same listing ID will be reused. Save: ${errorMessage(saveError)} Verification: ${errorMessage(verificationError)}`,
+          );
+        }
         if (reconciliation.error) {
-          throw new Error(`Save timed out and its outcome could not be verified. ${errorMessage(reconciliation.error)}`);
+          throw new Error(
+            `The save outcome could not be verified. The server may have saved it. Keep this form open and retry; the same listing ID will be reused. ${errorMessage(reconciliation.error)}`,
+          );
         }
         if (!reconciliation.data || !matchesSavedData(reconciliation.data as CFDBlocker, normalized)) {
           throw saveError;
@@ -199,6 +218,7 @@ export function CFDBlockersTab() {
     } finally {
       savingRef.current = false;
       setIsSaving(false);
+      setIsVerifyingSave(false);
     }
   };
 
@@ -301,7 +321,7 @@ export function CFDBlockersTab() {
               </label>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button type="submit" disabled={isSaving} className="gold-button inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4" />{isSaving ? "Saving..." : "Save CFD Blocker"}</button>
+              <button type="submit" disabled={isSaving} className="gold-button inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4" />{isVerifyingSave ? "Checking save..." : isSaving ? "Saving..." : "Save CFD Blocker"}</button>
               <button type="button" disabled={isSaving} onClick={() => setForm(null)} className="rounded-lg border border-dark-700 px-4 py-2 text-sm text-gray-300 disabled:opacity-50">Cancel</button>
             </div>
           </fieldset>
