@@ -23,6 +23,7 @@ interface AdminActivity {
 }
 
 const LAST_VIEWED_KEY = "admin-notifications-last-viewed";
+const READ_ACTIVITIES_KEY = "admin-notifications-read";
 
 function wasUpdatedAfterCreation(createdAt: string, updatedAt: string) {
     return Date.parse(updatedAt) > Date.parse(createdAt) + 1_000;
@@ -36,7 +37,10 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [lastViewedAt, setLastViewedAt] = useState(0);
+    const [readActivityKeys, setReadActivityKeys] = useState<Set<string>>(new Set());
     const isFetchingRef = useRef(false);
+
+    const activityKey = (activity: AdminActivity) => `${activity.id}:${activity.createdAt}`;
 
     const loadActivities = useCallback(async () => {
         if (isFetchingRef.current) return;
@@ -137,6 +141,13 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
                 const storedDate = Date.parse(storedValue);
                 if (Number.isFinite(storedDate)) setLastViewedAt(storedDate);
             }
+            const storedReadActivities = window.localStorage.getItem(READ_ACTIVITIES_KEY);
+            if (storedReadActivities) {
+                const parsed: unknown = JSON.parse(storedReadActivities);
+                if (Array.isArray(parsed) && parsed.every((value) => typeof value === "string")) {
+                    setReadActivityKeys(new Set(parsed));
+                }
+            }
         } catch (error) {
             console.error("Unable to read notification view state:", error);
         }
@@ -158,19 +169,26 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
         };
     }, [loadActivities]);
 
-    const unreadCount = activities.filter((activity) => Date.parse(activity.createdAt) > lastViewedAt).length;
+    const visibleActivities = activities.filter((activity) =>
+        !readActivityKeys.has(activityKey(activity)) && Date.parse(activity.createdAt) > lastViewedAt
+    );
+    const unreadCount = visibleActivities.length;
 
     const toggleNotifications = () => {
-        if (!isOpen) {
-            const viewedAt = Date.now();
-            setLastViewedAt(viewedAt);
-            try {
-                window.localStorage.setItem(LAST_VIEWED_KEY, new Date(viewedAt).toISOString());
-            } catch (error) {
-                console.error("Unable to persist notification view state:", error);
-            }
-        }
         setIsOpen((open) => !open);
+    };
+
+    const openActivity = (activity: AdminActivity) => {
+        const nextReadKeys = new Set(readActivityKeys);
+        nextReadKeys.add(activityKey(activity));
+        setReadActivityKeys(nextReadKeys);
+        try {
+            window.localStorage.setItem(READ_ACTIVITIES_KEY, JSON.stringify(Array.from(nextReadKeys)));
+        } catch (error) {
+            console.error("Unable to persist seen notification:", error);
+        }
+        setIsOpen(false);
+        onNavigate(activity.tab);
     };
 
     return (
@@ -213,19 +231,16 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
                             <div className="max-h-[min(28rem,70vh)] overflow-y-auto">
                                 {isLoading && activities.length === 0 ? (
                                     <p className="px-4 py-8 text-center text-sm text-gray-400">Loading recent activity...</p>
-                                ) : activities.length === 0 ? (
+                                ) : visibleActivities.length === 0 ? (
                                     <p className="px-4 py-8 text-center text-sm text-gray-400">
-                                        {loadError ? "Activity could not be loaded." : notificationsEnabled ? "No recent activity." : "Notifications are disabled in Settings."}
+                                        {loadError ? "Activity could not be loaded." : notificationsEnabled ? "No unseen notifications." : "Notifications are disabled in Settings."}
                                     </p>
-                                ) : activities.map((activity) => (
+                                ) : visibleActivities.map((activity) => (
                                     <button
                                         key={activity.id}
                                         type="button"
                                         data-activity-kind={activity.kind}
-                                        onClick={() => {
-                                            setIsOpen(false);
-                                            onNavigate(activity.tab);
-                                        }}
+                                        onClick={() => openActivity(activity)}
                                         className="block w-full border-b border-dark-800/70 px-4 py-3 text-left hover:bg-dark-900"
                                     >
                                         <span className="block text-sm font-medium text-white">{activity.title}</span>
