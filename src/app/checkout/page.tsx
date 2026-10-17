@@ -223,7 +223,10 @@ function CheckoutContent() {
           setQuoteError("");
           setQuoteVersion((version) => version + 1);
         }
-        throw new Error(result.error || "Unable to send payment for verification.");
+        const supportReference = typeof result.supportReference === "string"
+          ? ` Support reference: ${result.supportReference}.`
+          : "";
+        throw new Error(`${result.error || "Unable to send payment for verification."}${supportReference}`);
       }
       setPaymentRequest(result.request as PaymentRequest);
     } catch (error) {

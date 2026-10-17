@@ -7,14 +7,15 @@ import { createAdminClient } from "@/lib/supabase";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 
-function getPaymentRequestErrorMessage(error: unknown) {
+function getPaymentRequestErrorMessage(error: unknown, stage: string) {
   const record = error && typeof error === "object"
-    ? error as { code?: unknown; message?: unknown; details?: unknown }
+    ? error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown }
     : null;
   const code = typeof record?.code === "string" ? record.code : "";
   const details = [
     record?.message,
     record?.details,
+    record?.hint,
     error instanceof Error ? error.message : null,
   ].filter((value): value is string => typeof value === "string").join(" ");
 
@@ -23,13 +24,26 @@ function getPaymentRequestErrorMessage(error: unknown) {
         /(does not exist|not found|schema cache|could not find)/i.test(details))) {
     return "Payment setup is incomplete. Ask the site administrator to apply supabase/migrations/2026-10-18-manual-payments.sql to the production Supabase project.";
   }
+  if (/\borders\b/i.test(details) &&
+      (["42P01", "42703", "PGRST204", "PGRST205"].includes(code) ||
+        /(does not exist|not found|schema cache|could not find)/i.test(details))) {
+    return "Order storage is not fully set up. Ask the site administrator to apply the platform integration migration to production Supabase.";
+  }
+  if (/bot_delivery_requests/i.test(details) &&
+      (["42P01", "42703", "PGRST204", "PGRST205"].includes(code) ||
+        /(does not exist|not found|schema cache|could not find)/i.test(details))) {
+    return "Bot delivery storage is not set up. Ask the site administrator to apply the platform integration migration to production Supabase.";
+  }
   if (/SUPABASE_SERVICE_ROLE_KEY|service role key is missing/i.test(details)) {
     return "The payment service is not fully configured. Contact the site administrator.";
   }
   if (code === "42501" || /permission denied|not authorized/i.test(details)) {
     return "The payment service could not access the order database. Contact the site administrator.";
   }
-  return "Unable to save your payment request. No payment was confirmed. Retry, or use the Mobile Money fallback below and contact the site administrator with your transaction reference.";
+  if (["23502", "23503", "23514", "42703"].includes(code)) {
+    return "The payment database rejected this request because its schema or required data is inconsistent. Contact the site administrator.";
+  }
+  return `Unable to save your payment request during ${stage}. No payment was confirmed. Contact the site administrator and provide support reference shown below.`;
 }
 
 function paymentRequestResponse(request: {
@@ -95,6 +109,8 @@ async function markOrderCreationFailed(
 }
 
 export async function POST(request: Request) {
+  const supportReference = crypto.randomUUID();
+  let stage = "checking your sign-in";
   try {
     const authClient = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await authClient.auth.getUser();
@@ -105,6 +121,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const token = typeof body.quoteToken === "string" ? body.quoteToken : "";
     let quote: ManualPaymentQuote;
+    stage = "checking the quote";
     try {
       quote = verifyManualPaymentQuote(token, user.id);
     } catch (error) {
@@ -145,6 +162,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+    stage = "checking the product";
     const { data: product, error: productError } = await admin
       .from("products")
       .select("id, name, description, product_type, price_cents, currency, thumbnail_url, is_active, metadata")
@@ -157,6 +175,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "The product price changed or this product is unavailable. Request a new quote." }, { status: 409 });
     }
 
+    stage = "checking for an existing payment";
     const { data: existingRequest, error: existingError } = await admin
       .from("manual_payment_requests")
       .select("id, order_id, method, amount_minor, currency, display_amount_minor, display_currency, original_amount_cents, original_currency, exchange_rate, rate_source, rate_as_of, quote_expires_at, sender_phone, customer_binance_id, transaction_reference, status")
@@ -172,6 +191,7 @@ export async function POST(request: Request) {
         }, { status: 409 });
       }
       if (existingRequest.status === "pending") {
+        stage = "updating the existing payment request";
         const { data: updatedRequest, error: updateError } = await admin
           .from("manual_payment_requests")
           .update({
@@ -197,6 +217,7 @@ export async function POST(request: Request) {
       ? product.metadata?.delivery_method === "manual_email" ? "manual_email" : "automatic_download"
       : null;
     if (deliveryMethod === "manual_email") {
+      stage = "checking the bot delivery details";
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
       const mt5AccountNumber = typeof body.mt5AccountNumber === "string"
         ? body.mt5AccountNumber.trim()
@@ -209,6 +230,7 @@ export async function POST(request: Request) {
     }
 
     if (product.product_type === "bot" && deliveryMethod === "automatic_download") {
+      stage = "checking bot download availability";
       const { data: botLink, error: botLinkError } = await admin
         .from("bot_links")
         .select("download_url")
@@ -221,6 +243,7 @@ export async function POST(request: Request) {
       }
     }
 
+    stage = "creating the order";
     const { data: order, error: orderError } = await admin
       .from("orders")
       .insert({
@@ -239,6 +262,7 @@ export async function POST(request: Request) {
     if (orderError) throw orderError;
 
     if (botCustomer) {
+      stage = "saving bot delivery details";
       const { error: deliveryError } = await admin.from("bot_delivery_requests").insert({
         order_id: order.id,
         user_id: user.id,
@@ -253,6 +277,7 @@ export async function POST(request: Request) {
       }
     }
 
+    stage = "saving the payment request for admin review";
     const { data: paymentRequest, error: paymentError } = await admin
       .from("manual_payment_requests")
       .insert({
@@ -309,7 +334,20 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ request: paymentRequestResponse(paymentRequest), reused: false });
   } catch (error) {
-    console.error("Unable to create manual payment request:", error);
-    return NextResponse.json({ error: getPaymentRequestErrorMessage(error) }, { status: 500 });
+    const record = error && typeof error === "object"
+      ? error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown }
+      : null;
+    console.error("Unable to create manual payment request:", {
+      supportReference,
+      stage,
+      code: record?.code,
+      message: record?.message ?? (error instanceof Error ? error.message : String(error)),
+      details: record?.details,
+      hint: record?.hint,
+    });
+    return NextResponse.json({
+      error: getPaymentRequestErrorMessage(error, stage),
+      supportReference,
+    }, { status: 500 });
   }
 }
