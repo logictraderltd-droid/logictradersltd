@@ -175,6 +175,16 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
     const unreadCount = visibleActivities.length;
 
     const toggleNotifications = () => {
+        if (!isOpen && visibleActivities.length > 0) {
+            const nextReadKeys = new Set(readActivityKeys);
+            visibleActivities.forEach((activity) => nextReadKeys.add(activityKey(activity)));
+            setReadActivityKeys(nextReadKeys);
+            try {
+                window.localStorage.setItem(READ_ACTIVITIES_KEY, JSON.stringify(Array.from(nextReadKeys)));
+            } catch (error) {
+                console.error("Unable to persist seen notifications:", error);
+            }
+        }
         setIsOpen((open) => !open);
     };
 
