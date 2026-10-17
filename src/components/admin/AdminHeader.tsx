@@ -22,8 +22,7 @@ interface AdminActivity {
     tab: "users" | "orders";
 }
 
-const LAST_VIEWED_KEY = "admin-notifications-last-viewed";
-const READ_ACTIVITIES_KEY = "admin-notifications-read";
+const READ_ACTIVITIES_KEY = "admin-notifications-read-v2";
 
 function wasUpdatedAfterCreation(createdAt: string, updatedAt: string) {
     return Date.parse(updatedAt) > Date.parse(createdAt) + 1_000;
@@ -36,9 +35,7 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
     const [activities, setActivities] = useState<AdminActivity[]>([]);
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [loadError, setLoadError] = useState("");
-    const [lastViewedAt, setLastViewedAt] = useState(0);
     const [readActivityKeys, setReadActivityKeys] = useState<Set<string>>(new Set());
-    const [hasLoadedReadState, setHasLoadedReadState] = useState(false);
     const isFetchingRef = useRef(false);
 
     const activityKey = (activity: AdminActivity) => `${activity.id}:${activity.createdAt}`;
@@ -137,11 +134,6 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
 
     useEffect(() => {
         try {
-            const storedValue = window.localStorage.getItem(LAST_VIEWED_KEY);
-            if (storedValue) {
-                const storedDate = Date.parse(storedValue);
-                if (Number.isFinite(storedDate)) setLastViewedAt(storedDate);
-            }
             const storedReadActivities = window.localStorage.getItem(READ_ACTIVITIES_KEY);
             if (storedReadActivities) {
                 const parsed: unknown = JSON.parse(storedReadActivities);
@@ -151,8 +143,6 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
             }
         } catch (error) {
             console.error("Unable to read notification view state:", error);
-        } finally {
-            setHasLoadedReadState(true);
         }
 
         void loadActivities();
@@ -173,34 +163,11 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
     }, [loadActivities]);
 
     const visibleActivities = activities.filter((activity) =>
-        !readActivityKeys.has(activityKey(activity)) && Date.parse(activity.createdAt) > lastViewedAt
+        !readActivityKeys.has(activityKey(activity))
     );
     const unreadCount = visibleActivities.length;
 
-    useEffect(() => {
-        if (!isOpen || !hasLoadedReadState || visibleActivities.length === 0) return;
-
-        const nextReadKeys = new Set(readActivityKeys);
-        visibleActivities.forEach((activity) => nextReadKeys.add(activityKey(activity)));
-        setReadActivityKeys(nextReadKeys);
-        try {
-            window.localStorage.setItem(READ_ACTIVITIES_KEY, JSON.stringify(Array.from(nextReadKeys)));
-        } catch (error) {
-            console.error("Unable to persist seen notifications:", error);
-        }
-    }, [isOpen, hasLoadedReadState, visibleActivities, readActivityKeys]);
-
     const toggleNotifications = () => {
-        if (!isOpen && visibleActivities.length > 0) {
-            const nextReadKeys = new Set(readActivityKeys);
-            visibleActivities.forEach((activity) => nextReadKeys.add(activityKey(activity)));
-            setReadActivityKeys(nextReadKeys);
-            try {
-                window.localStorage.setItem(READ_ACTIVITIES_KEY, JSON.stringify(Array.from(nextReadKeys)));
-            } catch (error) {
-                console.error("Unable to persist seen notifications:", error);
-            }
-        }
         setIsOpen((open) => !open);
     };
 
