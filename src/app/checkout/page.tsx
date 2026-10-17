@@ -30,6 +30,27 @@ interface PaymentQuote {
   };
 }
 
+interface PaymentRequest {
+  id: string;
+  orderId: string;
+  method: PaymentMethod;
+  amount: string;
+  amountMinor: number;
+  currency: "RWF" | "USDT";
+  displayAmount: string;
+  displayCurrency: "USD" | "RWF" | "USDT";
+  originalAmount: number;
+  originalCurrency: string;
+  exchangeRate: number;
+  rateSource: string;
+  rateAsOf: string;
+  quoteExpiresAt: string;
+  senderPhone: string | null;
+  customerBinanceId: string | null;
+  transactionReference: string | null;
+  status: string;
+}
+
 const MOMO_USSD = "*182*1*1*0794303438";
 const MOMO_PHONE = "+250794303438";
 const BINANCE_ID = "536834998";
@@ -55,6 +76,8 @@ function CheckoutContent() {
   const [mt5AccountNumber, setMt5AccountNumber] = useState("");
   const [requestError, setRequestError] = useState("");
   const [copiedItem, setCopiedItem] = useState("");
+  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
   useEffect(() => {
     if (user?.email) setEmail(user.email);
@@ -70,6 +93,7 @@ function CheckoutContent() {
     let cancelled = false;
     const fetchProduct = async () => {
       setQuote(null);
+      setPaymentRequest(null);
       const supabase = createBrowserClient();
       const { data, error } = await supabase
         .from("products")
@@ -92,7 +116,7 @@ function CheckoutContent() {
   }, [productId, router]);
 
   useEffect(() => {
-    if (!product?.id || !isAuthenticated || product.metadata?.is_free === true) {
+    if (!product?.id || !isAuthenticated || product.metadata?.is_free === true || paymentRequest) {
       setQuote(null);
       setQuoteError("");
       setQuoteLoading(false);
@@ -124,7 +148,7 @@ function CheckoutContent() {
     };
     void loadQuote();
     return () => controller.abort();
-  }, [product?.id, product?.metadata?.is_free, isAuthenticated, paymentMethod, displayCurrency, quoteVersion]);
+  }, [product?.id, product?.metadata?.is_free, isAuthenticated, paymentMethod, displayCurrency, quoteVersion, paymentRequest]);
 
   const copyValue = async (value: string, item: string) => {
     try {
@@ -145,6 +169,69 @@ function CheckoutContent() {
       return false;
     }
     return true;
+  };
+
+  const submitPaidPayment = async () => {
+    if (!product || !quote || isSubmittingPayment) return;
+    setRequestError("");
+    if (!isAuthenticated) {
+      router.push(`/login?redirect=/checkout?product=${product.id}`);
+      return;
+    }
+    if (!ensureQuoteIsCurrent()) return;
+    if (fullName.trim().length < 2) {
+      setRequestError("Enter your full name so the administrator can identify your payment.");
+      return;
+    }
+    if (paymentMethod === "mobile_money" && !senderPhone.trim()) {
+      setRequestError("Enter the MTN number you used to make the payment.");
+      return;
+    }
+    if (paymentMethod === "binance" && !customerBinanceId.trim()) {
+      setRequestError("Enter your Binance ID so the administrator can identify your payment.");
+      return;
+    }
+    if (transactionReference.trim().length < 3) {
+      setRequestError("Enter the transaction reference from your successful payment.");
+      return;
+    }
+    if (product.type === "bot" && product.metadata?.delivery_method === "manual_email" &&
+        (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || mt5AccountNumber.trim().length < 3)) {
+      setRequestError("Enter a valid delivery email and MT5 account number.");
+      return;
+    }
+
+    setIsSubmittingPayment(true);
+    try {
+      const response = await fetch("/api/payments/manual/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quoteToken: quote.token,
+          fullName,
+          senderPhone,
+          customerBinanceId,
+          transactionReference,
+          email,
+          mt5AccountNumber,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        if (result.refreshQuote) {
+          setQuote(null);
+          setQuoteError("");
+          setQuoteVersion((version) => version + 1);
+        }
+        throw new Error(result.error || "Unable to send payment for verification.");
+      }
+      setPaymentRequest(result.request as PaymentRequest);
+    } catch (error) {
+      console.error("Unable to submit paid payment for verification:", error);
+      setRequestError(error instanceof Error ? error.message : "Unable to send payment for verification.");
+    } finally {
+      setIsSubmittingPayment(false);
+    }
   };
 
   const isFreeCourse = product?.type === "course" && product.metadata?.is_free === true;
@@ -228,6 +315,27 @@ function CheckoutContent() {
 
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
               <div className="dark-card p-6">
+                {paymentRequest ? (
+                  <div className="space-y-5">
+                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+                      <h2 className="text-xl font-bold text-white">Payment sent for admin verification</h2>
+                      <p className="mt-2 text-sm text-amber-200">
+                        Request status: {paymentRequest.status}. Your access will be enabled only after an administrator confirms your payment.
+                      </p>
+                      <p className="mt-2 text-sm text-gray-300">
+                        Order #{paymentRequest.orderId.slice(0, 8)} · {paymentRequest.amount} · Reference{" "}
+                        <span className="font-mono text-white">{paymentRequest.transactionReference}</span>
+                      </p>
+                    </div>
+                    <p className="text-sm text-gray-400">
+                      You can check the verification status in your dashboard. Do not send the payment a second time.
+                    </p>
+                    <Link href="/dashboard?tab=payments" className="inline-block text-sm text-gold-300 underline">
+                      View payment status
+                    </Link>
+                  </div>
+                ) : (
+                <>
                     <h2 className="text-xl font-bold mb-2">Manual payment method and currency</h2>
                     <p className="text-sm text-gray-400 mb-4">Choose a display currency and transfer manually. Mobile Money settles in RWF; Binance Pay settles in USDT. USD is for display only.</p>
                     <label className="mb-6 block space-y-1 text-sm text-gray-400">Display currency
@@ -388,6 +496,19 @@ function CheckoutContent() {
                       </div>
                     )}
                     {!isAuthenticated && <p className="mb-4 text-center text-sm text-gray-400">Sign in to get a current payment quote and continue checkout.</p>}
+                    <button
+                      type="button"
+                      onClick={() => void submitPaidPayment()}
+                      disabled={!isAuthenticated || !quote || quoteLoading || Boolean(quoteError) || isSubmittingPayment}
+                      className="w-full gold-button flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmittingPayment ? "Sending to admin for verification..." : "I have paid - send to admin for verification"}
+                    </button>
+                    <p className="mt-3 text-center text-xs text-gray-500">
+                      Submit only after the transfer succeeds. The administrator will verify the reference before granting access.
+                    </p>
+                </>
+                )}
               </div>
             </motion.div>
           </div>

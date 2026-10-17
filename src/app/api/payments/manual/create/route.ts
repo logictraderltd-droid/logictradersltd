@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     const reference = typeof body.transactionReference === "string"
       ? body.transactionReference.trim()
       : "";
-    if (reference && (reference.length < 3 || reference.length > 120)) {
+    if (reference.length < 3 || reference.length > 120) {
       return NextResponse.json({ error: "Enter a transaction reference between 3 and 120 characters." }, { status: 400 });
     }
 
@@ -166,6 +166,29 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (existingError) throw existingError;
     if (existingRequest) {
+      if (existingRequest.method !== quote.method) {
+        return NextResponse.json({
+          error: "You already have a pending payment request for this product using another payment method. Contact the site administrator before sending another payment.",
+        }, { status: 409 });
+      }
+      if (existingRequest.status === "pending") {
+        const { data: updatedRequest, error: updateError } = await admin
+          .from("manual_payment_requests")
+          .update({
+            full_name: fullName,
+            sender_phone: senderPhone,
+            customer_binance_id: customerBinanceId,
+            transaction_reference: reference,
+          })
+          .eq("id", existingRequest.id)
+          .eq("status", "pending")
+          .select("id, order_id, method, amount_minor, currency, display_amount_minor, display_currency, original_amount_cents, original_currency, exchange_rate, rate_source, rate_as_of, quote_expires_at, sender_phone, customer_binance_id, transaction_reference, status")
+          .maybeSingle();
+        if (updateError) throw updateError;
+        if (updatedRequest) {
+          return NextResponse.json({ request: paymentRequestResponse(updatedRequest), reused: true });
+        }
+      }
       return NextResponse.json({ request: paymentRequestResponse(existingRequest), reused: true });
     }
 
@@ -252,7 +275,7 @@ export async function POST(request: Request) {
         full_name: fullName,
         sender_phone: senderPhone,
         customer_binance_id: customerBinanceId,
-        transaction_reference: reference || null,
+        transaction_reference: reference,
         status: "pending",
       })
       .select("id, order_id, method, amount_minor, currency, display_amount_minor, display_currency, original_amount_cents, original_currency, exchange_rate, rate_source, rate_as_of, quote_expires_at, sender_phone, customer_binance_id, transaction_reference, status")
@@ -269,6 +292,11 @@ export async function POST(request: Request) {
           .maybeSingle();
         if (lookupError) throw lookupError;
         if (currentRequest) {
+          if (currentRequest.method !== quote.method) {
+            return NextResponse.json({
+              error: "You already have a pending payment request for this product using another payment method. Contact the site administrator before sending another payment.",
+            }, { status: 409 });
+          }
           return NextResponse.json({ request: paymentRequestResponse(currentRequest), reused: true });
         }
         return NextResponse.json({
