@@ -22,28 +22,36 @@ export async function GET(
     // Verify product is a bot
     const { data: product, error: productError } = await supabase
       .from('products')
-      .select('id, name, product_type')
+      .select('id, name, product_type, metadata')
       .eq('id', productId)
       .eq('product_type', 'bot')
-      .single();
+      .maybeSingle();
 
-    if (productError || !product) {
+    if (productError) throw productError;
+    if (!product) {
       return NextResponse.json(
         { error: 'Product not found or not a bot' },
         { status: 404 }
+      );
+    }
+    if (product.metadata?.delivery_method === 'manual_email') {
+      return NextResponse.json(
+        { error: 'This bot is delivered manually by email and cannot be downloaded here.' },
+        { status: 409 }
       );
     }
 
     // Check user access
     const { data: accessData, error: accessError } = await supabase
       .from('user_access')
-      .select('*')
+      .select('expires_at')
       .eq('user_id', user.id)
       .eq('product_id', productId)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
-    if (accessError || !accessData) {
+    if (accessError) throw accessError;
+    if (!accessData) {
       return NextResponse.json(
         { error: 'Access denied. Please purchase this bot first.' },
         { status: 403 }
@@ -51,27 +59,26 @@ export async function GET(
     }
 
     // Check if access has expired
-    if (accessData.expires_at) {
+    if (accessData.expires_at && new Date(accessData.expires_at) <= new Date()) {
       const expiryDate = new Date(accessData.expires_at);
-      if (expiryDate < new Date()) {
-        return NextResponse.json(
-          { error: 'Your access to this content has expired.' },
-          { status: 403 }
-        );
-      }
+      return NextResponse.json(
+        { error: `Your access to this content expired on ${expiryDate.toLocaleDateString()}.` },
+        { status: 403 }
+      );
     }
 
     // Get bot details
     const { data: bot, error: botError } = await supabase
       .from('bot_links')
-      .select('link_url, download_url, instructions')
+      .select('download_url, instructions')
       .eq('product_id', productId)
       .limit(1)
       .maybeSingle();
 
-    if (botError || !bot || (!bot.download_url && !bot.link_url)) {
+    if (botError) throw botError;
+    if (!bot?.download_url) {
       return NextResponse.json(
-        { error: 'Bot download is not configured' },
+        { error: 'A downloadable file is not configured for this bot.' },
         { status: 404 }
       );
     }
@@ -88,26 +95,21 @@ export async function GET(
       .select()
       .single();
 
-    if (tokenError || !token) {
-      console.error('Error creating download token:', tokenError);
-      return NextResponse.json(
-        { error: 'Failed to generate download token' },
-        { status: 500 }
-      );
-    }
+    if (tokenError) throw tokenError;
+    if (!token) throw new Error('Download token was not returned after creation.');
 
     // Return download info
     return NextResponse.json({
       success: true,
       token: token.token,
       productName: product.name,
-      downloadUrl: bot.download_url || bot.link_url,
+      downloadUrl: bot.download_url,
       setupInstructions: bot.instructions,
       expiresIn: 24 * 60 * 60, // 24 hours in seconds
       maxDownloads: 3,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error generating download:', error);
     return NextResponse.json(
       { error: 'Failed to generate download' },
@@ -123,7 +125,7 @@ export async function POST(
 ) {
   try {
     const body = await request.json();
-    const { token } = body;
+    const token = typeof body.token === 'string' ? body.token : '';
 
     if (!token) {
       return NextResponse.json(
@@ -133,16 +135,21 @@ export async function POST(
     }
 
     const supabase = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     // Verify token
     const { data: tokenData, error: tokenError } = await supabase
       .from('download_tokens')
-      .select('*')
+      .select('user_id, product_id, expires_at, download_count, max_downloads')
       .eq('token', token)
       .eq('product_id', params.productId)
-      .single();
+      .maybeSingle();
 
-    if (tokenError || !tokenData) {
+    if (tokenError) throw tokenError;
+    if (!tokenData || tokenData.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Invalid or expired token' },
         { status: 403 }
@@ -166,30 +173,67 @@ export async function POST(
     }
 
     // Get bot download URL
-    const { data: bot } = await supabase
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('id, product_type, metadata')
+      .eq('id', params.productId)
+      .maybeSingle();
+    if (productError) throw productError;
+    if (!product || product.product_type !== 'bot' || product.metadata?.delivery_method === 'manual_email') {
+      return NextResponse.json({ error: 'This bot is not available for download.' }, { status: 409 });
+    }
+
+    const { data: accessData, error: accessError } = await supabase
+      .from('user_access')
+      .select('expires_at')
+      .eq('user_id', user.id)
+      .eq('product_id', params.productId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (accessError) throw accessError;
+    if (!accessData) {
+      return NextResponse.json({ error: 'Access denied. Please purchase this bot first.' }, { status: 403 });
+    }
+    if (accessData.expires_at && new Date(accessData.expires_at) <= new Date()) {
+      return NextResponse.json({ error: 'Your access to this content has expired.' }, { status: 403 });
+    }
+
+    const { data: bot, error: botError } = await supabase
       .from('bot_links')
-      .select('download_url, link_url')
+      .select('download_url')
       .eq('product_id', params.productId)
       .limit(1)
       .maybeSingle();
+    if (botError) throw botError;
 
-    if (!bot || (!bot.download_url && !bot.link_url)) {
+    if (!bot?.download_url) {
       return NextResponse.json(
-        { error: 'Download not available' },
+        { error: 'A downloadable file is not configured for this bot.' },
         { status: 404 }
       );
     }
 
     // Increment download count
-    await supabase
+    const { data: updatedToken, error: updateError } = await supabase
       .from('download_tokens')
       .update({
         download_count: tokenData.download_count + 1,
       })
-      .eq('token', token);
+      .eq('token', token)
+      .eq('download_count', tokenData.download_count)
+      .lt('download_count', tokenData.max_downloads)
+      .select('token')
+      .maybeSingle();
+    if (updateError) throw updateError;
+    if (!updatedToken) {
+      return NextResponse.json(
+        { error: 'Download limit reached or this token has already been used.' },
+        { status: 409 }
+      );
+    }
 
     // Log download event
-    await supabase
+    const { error: analyticsError } = await supabase
       .from('analytics_events')
       .insert({
         user_id: tokenData.user_id,
@@ -200,14 +244,15 @@ export async function POST(
           download_count: tokenData.download_count + 1,
         },
       });
+    if (analyticsError) console.error('Unable to record bot download analytics:', analyticsError);
 
     return NextResponse.json({
       success: true,
-      downloadUrl: bot.download_url || bot.link_url,
+      downloadUrl: bot.download_url,
       remainingDownloads: tokenData.max_downloads - tokenData.download_count - 1,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error processing download:', error);
     return NextResponse.json(
       { error: 'Failed to process download' },

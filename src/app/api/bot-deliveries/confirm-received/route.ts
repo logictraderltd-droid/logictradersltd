@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const { data: order, error: orderError } = await admin
       .from("orders")
-      .select("id, user_id, status, product_type, metadata")
+      .select("id, user_id, product_id, status, product_type, metadata")
       .eq("id", orderId)
       .maybeSingle();
     if (orderError) throw orderError;
@@ -38,26 +38,42 @@ export async function POST(request: Request) {
       .eq("user_id", user.id)
       .maybeSingle();
     if (deliveryError) throw deliveryError;
-    if (!delivery || !["pending_delivery", "delivered"].includes(delivery.status)) {
+    if (!delivery || !["pending_delivery", "delivered", "received"].includes(delivery.status)) {
       return NextResponse.json({ error: "This bot delivery is not awaiting customer confirmation." }, { status: 409 });
     }
 
     const now = new Date().toISOString();
-    const update = delivery.status === "delivered"
-      ? { status: "received", updated_at: now }
-      : { status: "received", delivered_at: now, updated_at: now };
-    const { data: updated, error: updateError } = await admin
-      .from("bot_delivery_requests")
-      .update(update)
-      .eq("id", delivery.id)
-      .eq("user_id", user.id)
-      .in("status", ["pending_delivery", "delivered"])
-      .select("id")
-      .maybeSingle();
-    if (updateError) throw updateError;
-    if (!updated) {
-      return NextResponse.json({ error: "Delivery status changed. Refresh the dashboard and try again." }, { status: 409 });
+    if (delivery.status !== "received") {
+      const update = delivery.status === "delivered"
+        ? { status: "received", updated_at: now }
+        : { status: "received", delivered_at: now, updated_at: now };
+      const { data: updated, error: updateError } = await admin
+        .from("bot_delivery_requests")
+        .update(update)
+        .eq("id", delivery.id)
+        .eq("user_id", user.id)
+        .in("status", ["pending_delivery", "delivered"])
+        .select("id")
+        .maybeSingle();
+      if (updateError) throw updateError;
+      if (!updated) {
+        return NextResponse.json({ error: "Delivery status changed. Refresh the dashboard and try again." }, { status: 409 });
+      }
     }
+
+    const { error: accessError } = await admin
+      .from("user_access")
+      .upsert({
+        user_id: user.id,
+        product_id: order.product_id,
+        product_type: "bot",
+        order_id: order.id,
+        granted_by: user.id,
+        is_active: true,
+        expires_at: null,
+        access_expires_at: null,
+      }, { onConflict: "user_id,product_id" });
+    if (accessError) throw accessError;
 
     return NextResponse.json({ success: true, status: "received" });
   } catch (error) {

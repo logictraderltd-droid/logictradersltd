@@ -84,6 +84,8 @@ function DashboardContent() {
   const [referenceError, setReferenceError] = useState("");
   const [deliveryConfirmationSaving, setDeliveryConfirmationSaving] = useState<string | null>(null);
   const [deliveryConfirmationError, setDeliveryConfirmationError] = useState<{ orderId: string; message: string } | null>(null);
+  const [botDownloadSaving, setBotDownloadSaving] = useState<string | null>(null);
+  const [botDownloadError, setBotDownloadError] = useState<{ productId: string; message: string } | null>(null);
 
   useEffect(() => {
     setProfileForm({
@@ -141,6 +143,12 @@ function DashboardContent() {
         const activeAccess = (accessRows || []).filter((access: any) =>
           !access.expires_at || new Date(access.expires_at) > new Date()
         );
+        const { data: deliveryRows, error: deliveryError } = await supabase
+          .from("bot_delivery_requests")
+          .select("order_id, product_id, status")
+          .eq("user_id", user.id);
+        if (deliveryError) throw deliveryError;
+
         const courseIds = activeAccess.filter((access: any) => {
           const product = Array.isArray(access.products) ? access.products[0] : access.products;
           return product?.product_type === "course";
@@ -176,14 +184,33 @@ function DashboardContent() {
           const product = Array.isArray(access.products) ? access.products[0] : access.products;
           return product?.product_type === "bot";
         }).map((access) => access.product_id);
+        const receivedBotIds = (deliveryRows || [])
+          .filter((delivery: any) => delivery.status === "received")
+          .map((delivery: any) => delivery.product_id);
+        const allBotIds = Array.from(new Set([...botIds, ...receivedBotIds]));
 
         let bots: TradingBot[] = [];
-        if (botIds.length > 0) {
-          const { data: botData } = await supabase
+        if (allBotIds.length > 0) {
+          const { data: botData, error: botDataError } = await supabase
             .from("products")
             .select("*")
-            .in("id", botIds);
-          bots = botData || [];
+            .in("id", allBotIds);
+          if (botDataError) throw botDataError;
+          const { data: botLinks, error: botLinksError } = await supabase
+            .from("bot_links")
+            .select("product_id, download_url, instructions")
+            .in("product_id", allBotIds);
+          if (botLinksError) throw botLinksError;
+          const botLinksByProduct = new Map((botLinks || []).map((link: any) => [link.product_id, link]));
+          bots = (botData || []).map((bot: any) => {
+            const botLink = botLinksByProduct.get(bot.id);
+            return {
+              ...bot,
+              type: "bot",
+              download_url: botLink?.download_url || undefined,
+              setup_instructions: botLink?.instructions || undefined,
+            };
+          });
         }
 
         // Fetch signals
@@ -210,10 +237,6 @@ function DashboardContent() {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(5);
-        const { data: deliveryRows } = await supabase
-          .from("bot_delivery_requests")
-          .select("order_id, status")
-          .eq("user_id", user.id);
         const deliveryStatusByOrder = new Map((deliveryRows || []).map((row: any) => [row.order_id, row.status]));
         const orderIds = (ordersData || []).map((order: any) => order.id);
         const { data: paymentRequestRows, error: paymentRequestError } = orderIds.length
@@ -300,6 +323,11 @@ function DashboardContent() {
       if (!response.ok) throw new Error(result.error || "Unable to confirm bot delivery.");
       setData((current) => ({
         ...current,
+        bots: (() => {
+          const order = current.paymentHistory.find((item) => item.id === orderId);
+          if (!order?.product || current.bots.some((bot) => bot.id === order.product_id)) return current.bots;
+          return [...current.bots, { ...order.product, type: "bot" as const }];
+        })(),
         paymentHistory: current.paymentHistory.map((order) =>
           order.id === orderId ? { ...order, delivery_status: "received" } : order
         ),
@@ -312,6 +340,43 @@ function DashboardContent() {
       });
     } finally {
       setDeliveryConfirmationSaving(null);
+    }
+  };
+
+  const downloadBot = async (productId: string) => {
+    setBotDownloadSaving(productId);
+    setBotDownloadError(null);
+    const downloadWindow = window.open("about:blank", "_blank");
+
+    try {
+      const tokenResponse = await fetch(`/api/downloads/${productId}`);
+      const tokenResult = await tokenResponse.json();
+      if (!tokenResponse.ok) throw new Error(tokenResult.error || "Unable to prepare the bot download.");
+
+      const downloadResponse = await fetch(`/api/downloads/${productId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenResult.token }),
+      });
+      const downloadResult = await downloadResponse.json();
+      if (!downloadResponse.ok) throw new Error(downloadResult.error || "Unable to start the bot download.");
+      if (!downloadResult.downloadUrl) throw new Error("This bot does not have a download link configured.");
+
+      if (downloadWindow) {
+        downloadWindow.opener = null;
+        downloadWindow.location.href = downloadResult.downloadUrl;
+      } else {
+        window.location.assign(downloadResult.downloadUrl);
+      }
+    } catch (error) {
+      downloadWindow?.close();
+      console.error("Unable to download bot:", error);
+      setBotDownloadError({
+        productId,
+        message: error instanceof Error ? error.message : "Unable to download bot.",
+      });
+    } finally {
+      setBotDownloadSaving(null);
     }
   };
 
@@ -629,6 +694,10 @@ function DashboardContent() {
                         <Bell className="w-6 h-6 text-gold-500" />
                         Trading Signals
                       </h2>
+                      <Link href="/signals" className="px-4 py-2 bg-gold-500 hover:bg-gold-600 text-dark-950 font-bold rounded-lg transition-colors flex items-center gap-2">
+                        <Plus className="w-4 h-4" />
+                        Browse Signal Plans
+                      </Link>
                     </div>
 
                     <div className="space-y-4">
@@ -702,10 +771,16 @@ function DashboardContent() {
                 {/* Bots Tab */}
                 {activeTab === "bots" && (
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                      <Bot className="w-6 h-6 text-gold-500" />
-                      My Trading Bots
-                    </h2>
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Bot className="w-6 h-6 text-gold-500" />
+                        My Trading Bots
+                      </h2>
+                      <Link href="/bots" className="px-4 py-2 bg-gold-500 hover:bg-gold-600 text-dark-950 font-bold rounded-lg transition-colors flex items-center gap-2">
+                        <Plus className="w-4 h-4" />
+                        Browse Bots
+                      </Link>
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {data.bots.map(bot => (
@@ -735,14 +810,31 @@ function DashboardContent() {
                           <p className="text-gray-400 text-sm mb-8 flex-1 leading-relaxed">{bot.description}</p>
 
                           <div className="grid grid-cols-2 gap-4 mt-auto">
-                            {bot.download_url && (
-                              <a href={bot.download_url} target="_blank" className="flex items-center justify-center gap-2 px-4 py-3 bg-gold-500 hover:bg-gold-600 text-dark-950 font-bold rounded-xl transition-all hover:scale-[1.02] text-sm shadow-lg shadow-gold-500/20">
-                                <Download className="w-4 h-4" /> Download
-                              </a>
+                            {bot.metadata?.delivery_method === "manual_email" ? (
+                              <div className="col-span-2 rounded-xl border border-gold-500/20 bg-gold-500/5 px-4 py-3 text-center text-sm text-gold-300">
+                                Delivered manually by email
+                              </div>
+                            ) : bot.download_url ? (
+                              <button
+                                type="button"
+                                onClick={() => void downloadBot(bot.id)}
+                                disabled={botDownloadSaving === bot.id}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-gold-500 hover:bg-gold-600 text-dark-950 font-bold rounded-xl transition-all hover:scale-[1.02] text-sm shadow-lg shadow-gold-500/20 disabled:cursor-wait disabled:opacity-60"
+                              >
+                                <Download className="w-4 h-4" />
+                                {botDownloadSaving === bot.id ? "Preparing..." : "Download"}
+                              </button>
+                            ) : (
+                              <div className="col-span-2 rounded-xl border border-dark-700 px-4 py-3 text-center text-sm text-gray-400">
+                                No download file is configured for this bot.
+                              </div>
                             )}
-                            <button className="flex items-center justify-center gap-2 px-4 py-3 bg-dark-800 hover:bg-dark-700 text-gray-200 font-medium rounded-xl transition-all hover:text-white text-sm border border-dark-700 hover:border-dark-600">
+                            <Link href={`/bots/${bot.id}`} className="flex items-center justify-center gap-2 px-4 py-3 bg-dark-800 hover:bg-dark-700 text-gray-200 font-medium rounded-xl transition-all hover:text-white text-sm border border-dark-700 hover:border-dark-600">
                               <FileText className="w-4 h-4" /> Setup Guide
-                            </button>
+                            </Link>
+                            {botDownloadError?.productId === bot.id && (
+                              <p role="alert" className="col-span-2 text-xs text-red-300">{botDownloadError.message}</p>
+                            )}
                           </div>
                         </Card>
                       ))}
