@@ -25,6 +25,37 @@ interface StoredSocialLink {
 
 const defaultShorts: ShortVideo[] = [];
 const defaultSocialLinks: Array<{ label: string; icon: any; href: string }> = [];
+function getYouTubeEmbedUrl(value: string, muted: boolean) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    let videoId: string | null = null;
+
+    if (host === "youtu.be") {
+      videoId = url.pathname.split("/").filter(Boolean)[0] || null;
+    } else if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
+      const segments = url.pathname.split("/").filter(Boolean);
+      if (segments[0] === "watch") videoId = url.searchParams.get("v");
+      else if (["shorts", "embed", "live", "v"].includes(segments[0])) videoId = segments[1] || null;
+    } else {
+      return null;
+    }
+
+    if (!videoId || !/^[\w-]{6,20}$/.test(videoId)) return null;
+
+    const embedUrl = new URL(`https://www.youtube-nocookie.com/embed/${videoId}`);
+    embedUrl.searchParams.set("autoplay", "1");
+    embedUrl.searchParams.set("mute", muted ? "1" : "0");
+    embedUrl.searchParams.set("playsinline", "1");
+    embedUrl.searchParams.set("rel", "0");
+    const start = url.searchParams.get("start") || url.searchParams.get("t");
+    if (start && /^\d+$/.test(start)) embedUrl.searchParams.set("start", start);
+    return embedUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
 const shortsNavigation = [
   { label: "Home", href: "/" },
   { label: "Courses", href: "/courses" },
@@ -98,8 +129,10 @@ export default function Hero() {
     setIsFullscreenShorts(true);
   };
 
-  const renderShort = (short: ShortVideo, fullscreen = false) => (
-    <article
+  const renderShort = (short: ShortVideo, fullscreen = false) => {
+    const youtubeEmbedUrl = short.source === "youtube" ? getYouTubeEmbedUrl(short.video_url, muted) : null;
+    return (
+      <article
       key={`${fullscreen ? "fullscreen-" : "inline-"}${short.id}`}
       id={fullscreen ? `fullscreen-short-${short.id}` : undefined}
       role={fullscreen ? undefined : "button"}
@@ -115,8 +148,24 @@ export default function Hero() {
       }}
       className={`relative h-full min-h-full snap-start overflow-hidden bg-black ${fullscreen ? "mx-auto w-full max-w-[520px]" : "cursor-zoom-in"}`}
     >
-      {short.source === "youtube" ? (
-        <iframe className="h-full w-full" src={short.video_url.replace("mute=1", `mute=${muted ? "1" : "0"}`)} title={short.name} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+      {youtubeEmbedUrl ? (
+        <iframe
+          className="h-full w-full"
+          src={youtubeEmbedUrl}
+          title={short.name}
+          allow="autoplay; encrypted-media; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      ) : short.source === "youtube" ? (
+        <a
+          href={short.video_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-full w-full items-center justify-center text-sm font-semibold text-white underline"
+          onClick={(event) => event.stopPropagation()}
+        >
+          Open this YouTube video
+        </a>
       ) : (
         <video className="h-full w-full object-cover" src={short.video_url} poster={short.thumbnail_url} muted={muted} loop playsInline autoPlay />
       )}
@@ -130,8 +179,9 @@ export default function Hero() {
           <Maximize2 className="h-4 w-4" />
         </button>
       )}
-    </article>
-  );
+      </article>
+    );
+  };
 
   useEffect(() => {
     const loadMarketingContent = async () => {
