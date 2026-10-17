@@ -90,6 +90,7 @@ export default function AdminDashboard() {
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
 
   const [users, setUsers] = useState<User[]>([]);
+  const [usersError, setUsersError] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersError, setOrdersError] = useState("");
@@ -153,7 +154,9 @@ export default function AdminDashboard() {
       if (activeTab === "overview") {
         await fetchOverviewData(hasData || isRefresh);
       } else if (activeTab === "users") {
-        const { data } = await supabase.from("users").select("*").order("created_at", { ascending: false });
+        setUsersError("");
+        const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false });
+        if (error) throw error;
         setUsers(data || []);
       } else if (activeTab === "products") {
         const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false });
@@ -170,6 +173,9 @@ export default function AdminDashboard() {
       dataFetchedRef.current[activeTab] = true;
     } catch (error) {
       console.error(`Error fetching ${activeTab} data:`, error);
+      if (activeTab === "users") {
+        setUsersError(error instanceof Error ? error.message : "Unable to load users.");
+      }
       if (activeTab === "orders") {
         setOrdersError(error instanceof Error ? error.message : "Unable to load orders.");
       }
@@ -266,7 +272,12 @@ export default function AdminDashboard() {
                   )}
 
                   {activeTab === "users" && (
-                    <UsersTab users={users} />
+                    <UsersTab
+                      users={users}
+                      currentUserId={user?.id || ""}
+                      loadError={usersError}
+                      onRefresh={() => fetchTabData(true)}
+                    />
                   )}
 
                   {activeTab === "products" && (
