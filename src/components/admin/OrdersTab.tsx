@@ -7,6 +7,7 @@ import { createBrowserClient } from "@/lib/supabase";
 
 interface OrdersTabProps {
     orders: Order[];
+    loadError?: string;
     onRefresh: () => void;
 }
 
@@ -33,7 +34,7 @@ interface ManualPaymentRequest {
     rejection_reason: string | null;
 }
 
-export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
+export function OrdersTab({ orders, loadError, onRefresh }: OrdersTabProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -215,6 +216,12 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
                     <Download className="w-4 h-4" /> Export CSV
                 </button>
             </div>
+
+            {loadError && (
+                <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                    Unable to load orders: {loadError}
+                </div>
+            )}
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-4">

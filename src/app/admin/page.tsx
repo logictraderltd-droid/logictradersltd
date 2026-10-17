@@ -19,6 +19,41 @@ import { SettingsTab } from "@/components/admin/SettingsTab";
 import { MarketingTab } from "@/components/admin/MarketingTab";
 import { PlatformContentTab } from "@/components/admin/PlatformContentTab";
 
+async function fetchAdminOrders(
+  supabase: ReturnType<typeof createBrowserClient>,
+  limit?: number,
+) {
+  let query = supabase.from("orders").select("*").order("created_at", { ascending: false });
+  if (limit !== undefined) query = query.limit(limit);
+
+  const { data: rows, error } = await query;
+  if (error) throw error;
+
+  const orders = rows || [];
+  const productIds = Array.from(new Set(orders.map((order) => order.product_id).filter(Boolean)));
+  const userIds = Array.from(new Set(orders.map((order) => order.user_id).filter(Boolean)));
+  const [productsResult, usersResult] = await Promise.all([
+    productIds.length
+      ? supabase.from("products").select("id, name, product_type, currency").in("id", productIds)
+      : Promise.resolve({ data: [], error: null }),
+    userIds.length
+      ? supabase.from("users").select("id, email, full_name").in("id", userIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (productsResult.error) throw productsResult.error;
+  if (usersResult.error) throw usersResult.error;
+
+  const productsById = new Map((productsResult.data || []).map((product) => [product.id, product]));
+  const usersById = new Map((usersResult.data || []).map((user) => [user.id, user]));
+
+  return normalizeOrderRows(orders.map((order) => ({
+    ...order,
+    product: productsById.get(order.product_id) || null,
+    user: usersById.get(order.user_id) || null,
+  })));
+}
+
 interface AdminStats {
   totalUsers: number;
   totalRevenue: number;
@@ -50,6 +85,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersError, setOrdersError] = useState("");
   const [signals, setSignals] = useState<TradingSignal[]>([]);
 
   // Function to fetch overview data
@@ -62,14 +98,14 @@ export default function AdminDashboard() {
         { data: revenueData },
         { count: totalOrders },
         { count: activeSubscriptions },
-        { data: recentOrdersData },
+        recentOrdersData,
         { data: recentUsersData }
       ] = await Promise.all([
         supabase.from("users").select("*", { count: "exact", head: true }),
         supabase.from("orders").select("amount_cents").eq("status", "completed"),
         supabase.from("orders").select("*", { count: "exact", head: true }),
         supabase.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "active").gt("ends_at", new Date().toISOString()),
-        supabase.from("orders").select(`*, product:products(name), user:users(email)`).order("created_at", { ascending: false }).limit(5),
+        fetchAdminOrders(supabase, 5),
         supabase.from("users").select("*").order("created_at", { ascending: false }).limit(5)
       ]);
 
@@ -82,7 +118,7 @@ export default function AdminDashboard() {
         activeSubscriptions: activeSubscriptions || 0,
       });
 
-      setRecentOrders(normalizeOrderRows(recentOrdersData || []));
+      setRecentOrders(recentOrdersData);
       setRecentUsers(recentUsersData || []);
       dataFetchedRef.current['overview'] = true;
 
@@ -117,8 +153,8 @@ export default function AdminDashboard() {
         if (error) throw error;
         setProducts(normalizeProductRows(data || []));
       } else if (activeTab === "orders") {
-        const { data } = await supabase.from("orders").select(`*, product:products(name), user:users(email)`).order("created_at", { ascending: false });
-        setOrders(normalizeOrderRows(data || []));
+        setOrdersError("");
+        setOrders(await fetchAdminOrders(supabase));
       } else if (activeTab === "signals") {
         const { data } = await supabase.from("signals").select("*").order("created_at", { ascending: false });
         setSignals(data || []);
@@ -127,6 +163,9 @@ export default function AdminDashboard() {
       dataFetchedRef.current[activeTab] = true;
     } catch (error) {
       console.error(`Error fetching ${activeTab} data:`, error);
+      if (activeTab === "orders") {
+        setOrdersError(error instanceof Error ? error.message : "Unable to load orders.");
+      }
     } finally {
       setIsLoading(false);
       setIsInitialLoad(false);
@@ -233,6 +272,7 @@ export default function AdminDashboard() {
                   {activeTab === "orders" && (
                     <OrdersTab
                       orders={orders}
+                      loadError={ordersError}
                       onRefresh={() => fetchTabData(true)}
                     />
                   )}
