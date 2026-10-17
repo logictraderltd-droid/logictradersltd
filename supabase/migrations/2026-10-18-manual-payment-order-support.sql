@@ -46,6 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_status
 ALTER TABLE public.user_access
   ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS access_expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS product_type public.product_type,
   ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 
 DO $$
@@ -70,6 +71,12 @@ UPDATE public.user_access
 SET access_expires_at = expires_at
 WHERE access_expires_at IS NULL
   AND expires_at IS NOT NULL;
+
+UPDATE public.user_access AS access
+SET product_type = products.product_type
+FROM public.products AS products
+WHERE products.id = access.product_id
+  AND access.product_type IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_access_user_product
   ON public.user_access (user_id, product_id);
