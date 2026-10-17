@@ -7,9 +7,9 @@ import { createBrowserClient } from "@/lib/supabase";
 import type { PlatformListing } from "@/components/PlatformListings";
 
 const contentSections = [
-  { key: "cfd_blocker_content", title: "CFD Blocker", description: "Providers, profile images, videos, details, and affiliate offers." },
-  { key: "pro_firm_listings", title: "Pro Firm listings", description: "Manage each firm and its own profile, video, description, and affiliate link." },
-  { key: "copy_trading_content", title: "Copy Trading", description: "Providers, strategies, promotional images, videos, and links." },
+  { key: "cfd_blocker_content", title: "CFD Blocker", description: "Providers, profile photos, separate videos, details, and affiliate offers." },
+  { key: "pro_firm_listings", title: "Pro Firm listings", description: "Manage each firm and its separate profile photo, video, description, and affiliate link." },
+  { key: "copy_trading_content", title: "Copy Trading", description: "Providers, strategies, separate promotional photos and videos, and links." },
 ] as const;
 
 const blankListing = (): PlatformListing => ({
@@ -300,8 +300,8 @@ export function PlatformContentTab() {
             <>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1 text-sm text-gray-400">Name / title<input value={item.title} onChange={(event) => updateItem(item.id, { title: event.target.value })} className="dark-input w-full" required /></label>
-              <div className="space-y-1 text-sm text-gray-400">
-                <label htmlFor={`image-${item.id}`}>Profile / image URL</label>
+              <div className="space-y-2 rounded-lg border border-dark-700 p-3 text-sm text-gray-400">
+                <div><h5 className="font-medium text-white">Profile photo</h5><p className="text-xs text-gray-500">Image only; displayed separately from the video.</p></div>
                 <div className="flex gap-2">
                   <input id={`image-${item.id}`} type="url" value={item.image_url} onChange={(event) => updateItem(item.id, { image_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
                   <CldUploadWidget uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"} onSuccess={(result: any) => { if (result.info?.secure_url) updateItem(item.id, { image_url: result.info.secure_url }); }}>
@@ -309,8 +309,8 @@ export function PlatformContentTab() {
                   </CldUploadWidget>
                 </div>
               </div>
-              <div className="space-y-1 text-sm text-gray-400">
-                <label htmlFor={`video-${item.id}`}>Video URL (YouTube, Vimeo, or hosted video)</label>
+              <div className="space-y-2 rounded-lg border border-dark-700 p-3 text-sm text-gray-400">
+                <div><h5 className="font-medium text-white">Video</h5><p className="text-xs text-gray-500">Add a YouTube, Vimeo, or hosted video URL separately from the photo.</p></div>
                 <div className="flex gap-2">
                   <input id={`video-${item.id}`} type="url" value={item.video_url} onChange={(event) => updateItem(item.id, { video_url: event.target.value })} className="dark-input w-full" placeholder="https://" />
                   <CldUploadWidget uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "logic_traders_unsigned"} options={{ resourceType: "video" }} onSuccess={(result: any) => { if (result.info?.secure_url) updateItem(item.id, { video_url: result.info.secure_url }); }}>
@@ -318,7 +318,7 @@ export function PlatformContentTab() {
                   </CldUploadWidget>
                 </div>
               </div>
-              <label className="space-y-1 text-sm text-gray-400">Affiliate / provider URL<input type="url" value={item.affiliate_url} onChange={(event) => updateItem(item.id, { affiliate_url: event.target.value })} className="dark-input w-full" placeholder="https://" /></label>
+              <label className="space-y-1 text-sm text-gray-400">Affiliate / provider URL (opens from “Click here for more info”)<input type="url" value={item.affiliate_url} onChange={(event) => updateItem(item.id, { affiliate_url: event.target.value })} className="dark-input w-full" placeholder="https://" /></label>
               <label className="space-y-1 text-sm text-gray-400">Display order<input type="number" value={item.sort_order} onChange={(event) => updateItem(item.id, { sort_order: Number(event.target.value) })} className="dark-input w-full" /></label>
               <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={item.published} onChange={(event) => updateItem(item.id, { published: event.target.checked })} /> Published on the public site</label>
             </div>

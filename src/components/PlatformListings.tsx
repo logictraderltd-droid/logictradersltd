@@ -98,37 +98,40 @@ export default function PlatformListings({
                 const hostedVideo = item.video_url && isSafeExternalUrl(item.video_url) && isHostedVideoUrl(item.video_url);
                 return (
                   <article key={item.id} className="dark-card overflow-hidden">
-                    {hostedVideo ? (
-                      <video
-                        src={item.video_url}
-                        poster={item.image_url || undefined}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        className="aspect-video w-full bg-black object-contain"
-                      />
-                    ) : videoEmbed ? (
-                      <div className="aspect-video bg-black">
-                        <iframe src={videoEmbed} title={`${item.title} video`} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
-                      </div>
-                    ) : item.video_url && isSafeExternalUrl(item.video_url) ? (
-                      <a href={item.video_url} target="_blank" rel="noopener noreferrer" className="flex aspect-video items-center justify-center bg-dark-900 text-gold-400" aria-label={`Watch ${item.title}`}>
-                        <Play className="h-12 w-12" />
-                      </a>
-                    ) : item.image_url && isSafeExternalUrl(item.image_url) ? (
-                      <img src={item.image_url} alt={item.title} className="aspect-video w-full object-cover" />
-                    ) : (
-                      <div className="flex aspect-video items-center justify-center bg-dark-900 text-gray-600">{title}</div>
-                    )}
                     <div className="p-6">
                       <h2 className="text-xl font-bold text-white">{item.title}</h2>
                       <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-gray-400">{item.description}</p>
-                      {item.image_url && item.video_url && isSafeExternalUrl(item.image_url) && (
-                        <img src={item.image_url} alt="" className="mt-4 max-h-40 w-full rounded-lg object-cover" />
+                      {item.image_url && isSafeExternalUrl(item.image_url) && (
+                        <section className="mt-5" aria-label={`${item.title} profile photo`}>
+                          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Profile photo</h3>
+                          <img src={item.image_url} alt={`${item.title} profile`} className="max-h-56 w-full rounded-lg object-contain bg-dark-900" />
+                        </section>
+                      )}
+                      {item.video_url && isSafeExternalUrl(item.video_url) && (
+                        <section className="mt-5" aria-label={`${item.title} video`}>
+                          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Video</h3>
+                          {hostedVideo ? (
+                            <video
+                              src={item.video_url}
+                              controls
+                              playsInline
+                              preload="metadata"
+                              className="aspect-video w-full rounded-lg bg-black object-contain"
+                            />
+                          ) : videoEmbed ? (
+                            <div className="aspect-video overflow-hidden rounded-lg bg-black">
+                              <iframe src={videoEmbed} title={`${item.title} video`} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
+                            </div>
+                          ) : (
+                            <a href={item.video_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-gold-300 underline">
+                              <Play className="h-4 w-4" /> Open video
+                            </a>
+                          )}
+                        </section>
                       )}
                       {item.affiliate_url && isSafeExternalUrl(item.affiliate_url) && (
                         <a href={item.affiliate_url} target="_blank" rel="nofollow sponsored noopener noreferrer" className="gold-button mt-6 inline-flex items-center gap-2">
-                          Learn more <ArrowUpRight className="h-4 w-4" />
+                          Click here for more info <ArrowUpRight className="h-4 w-4" />
                         </a>
                       )}
                     </div>
