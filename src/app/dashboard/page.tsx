@@ -82,6 +82,8 @@ function DashboardContent() {
   const [paymentReferences, setPaymentReferences] = useState<Record<string, string>>({});
   const [referenceSaving, setReferenceSaving] = useState<string | null>(null);
   const [referenceError, setReferenceError] = useState("");
+  const [deliveryConfirmationSaving, setDeliveryConfirmationSaving] = useState<string | null>(null);
+  const [deliveryConfirmationError, setDeliveryConfirmationError] = useState<{ orderId: string; message: string } | null>(null);
 
   useEffect(() => {
     setProfileForm({
@@ -282,6 +284,34 @@ function DashboardContent() {
       setReferenceError(error instanceof Error ? error.message : "Unable to submit reference.");
     } finally {
       setReferenceSaving(null);
+    }
+  };
+
+  const confirmBotDeliveryReceived = async (orderId: string) => {
+    setDeliveryConfirmationSaving(orderId);
+    setDeliveryConfirmationError(null);
+    try {
+      const response = await fetch("/api/bot-deliveries/confirm-received", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to confirm bot delivery.");
+      setData((current) => ({
+        ...current,
+        paymentHistory: current.paymentHistory.map((order) =>
+          order.id === orderId ? { ...order, delivery_status: "received" } : order
+        ),
+      }));
+    } catch (error) {
+      console.error("Unable to confirm bot delivery:", error);
+      setDeliveryConfirmationError({
+        orderId,
+        message: error instanceof Error ? error.message : "Unable to confirm bot delivery.",
+      });
+    } finally {
+      setDeliveryConfirmationSaving(null);
     }
   };
 
@@ -797,8 +827,23 @@ function DashboardContent() {
                                   </span>
                                   {order.delivery_status && (
                                     <span className="mt-1 block text-xs capitalize text-gold-300">
-                                      Bot delivery: {order.delivery_status.replace('_', ' ')}
+                                      Bot delivery: {order.delivery_status === "received" ? "received and confirmed" : order.delivery_status.replace('_', ' ')}
                                     </span>
+                                  )}
+                                  {order.product_type === "bot" &&
+                                    order.metadata?.delivery_method === "manual_email" &&
+                                    ["pending_delivery", "delivered"].includes(order.delivery_status || "") && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void confirmBotDeliveryReceived(order.id)}
+                                        disabled={deliveryConfirmationSaving === order.id}
+                                        className="mt-2 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-300 hover:bg-green-500/20 disabled:cursor-wait disabled:opacity-50"
+                                      >
+                                        {deliveryConfirmationSaving === order.id ? "Confirming..." : "Confirm delivery received"}
+                                      </button>
+                                    )}
+                                  {deliveryConfirmationError?.orderId === order.id && (
+                                    <p role="alert" className="mt-2 text-xs text-red-300">{deliveryConfirmationError.message}</p>
                                   )}
                                   {order.manual_payment_request && (
                                     <div className="mt-1 text-xs">

@@ -37,19 +37,37 @@ export async function POST(request: Request) {
       .eq('order_id', orderId)
       .maybeSingle();
     if (deliveryError) throw deliveryError;
-    if (!delivery || delivery.status === 'pending_payment') {
+    if (!delivery || delivery.status === 'pending_payment' || delivery.status === 'payment_failed') {
       return NextResponse.json({ error: 'No verified delivery request exists for this order.' }, { status: 409 });
     }
-    if (delivery.status !== 'delivered') {
+    if (delivery.status === 'pending_delivery') {
       const now = new Date().toISOString();
-      const { error: updateError } = await admin
+      const { data: updated, error: updateError } = await admin
         .from('bot_delivery_requests')
         .update({ status: 'delivered', delivered_at: now, updated_at: now })
-        .eq('id', delivery.id);
+        .eq('id', delivery.id)
+        .eq('status', 'pending_delivery')
+        .select('id')
+        .maybeSingle();
       if (updateError) throw updateError;
+      if (!updated) {
+        const { data: currentDelivery, error: currentDeliveryError } = await admin
+          .from('bot_delivery_requests')
+          .select('status')
+          .eq('id', delivery.id)
+          .maybeSingle();
+        if (currentDeliveryError) throw currentDeliveryError;
+        return NextResponse.json({
+          success: true,
+          status: currentDelivery?.status === 'received' ? 'received' : 'delivered',
+        });
+      }
     }
 
-    return NextResponse.json({ success: true, status: 'delivered' });
+    return NextResponse.json({
+      success: true,
+      status: delivery.status === 'received' ? 'received' : 'delivered',
+    });
   } catch (error) {
     console.error('Unable to update bot delivery status:', error);
     return NextResponse.json({ error: 'Unable to update delivery status.' }, { status: 500 });
