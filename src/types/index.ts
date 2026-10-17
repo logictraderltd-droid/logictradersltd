@@ -107,6 +107,17 @@ export interface Order {
   delivery_status?: string | null;
   status: 'pending' | 'completed' | 'failed' | 'refunded';
   payment_method?: string;
+  manual_payment_request?: {
+    id: string;
+    method: 'mobile_money' | 'binance';
+    amount_minor: number;
+    currency: 'RWF' | 'USDT';
+    display_amount_minor: number;
+    display_currency: 'USD' | 'RWF' | 'USDT';
+    transaction_reference: string | null;
+    status: 'pending' | 'verifying' | 'paid' | 'rejected';
+    rejection_reason: string | null;
+  } | null;
   created_at: string;
   updated_at: string;
   product?: Product;

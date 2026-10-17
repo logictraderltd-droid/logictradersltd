@@ -43,10 +43,11 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
         setIsLoading(true);
         try {
             const supabase = createBrowserClient();
-            const [usersResult, ordersResult, paymentsResult, subscriptionsResult] = await Promise.all([
+            const [usersResult, ordersResult, paymentsResult, manualPaymentsResult, subscriptionsResult] = await Promise.all([
                 supabase.from("users").select("id,email,full_name,created_at,updated_at").order("updated_at", { ascending: false }).limit(10),
                 supabase.from("orders").select("id,user_id,amount_cents,status,created_at,updated_at").order("updated_at", { ascending: false }).limit(10),
                 supabase.from("platform_payment_transactions").select("id,user_id,amount_cents,currency,status,provider,created_at,updated_at").order("updated_at", { ascending: false }).limit(10),
+                supabase.from("manual_payment_requests").select("id,user_id,amount_minor,currency,status,method,created_at,updated_at").order("updated_at", { ascending: false }).limit(10),
                 supabase.from("subscriptions").select("id,user_id,status,created_at,updated_at").order("updated_at", { ascending: false }).limit(10),
             ]);
 
@@ -75,6 +76,17 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
                     createdAt: payment.updated_at || payment.created_at,
                     tab: "orders" as const,
                 })),
+                ...(manualPaymentsResult.data || []).map((payment) => ({
+                    id: `manual-payment:${payment.id}`,
+                    kind: "transaction" as const,
+                    title: wasUpdatedAfterCreation(payment.created_at, payment.updated_at) ? "Manual payment updated" : "Manual payment request",
+                    description: `${payment.method} · ${payment.status} · ${new Intl.NumberFormat("en-US", {
+                        minimumFractionDigits: payment.currency === "RWF" ? 0 : 2,
+                        maximumFractionDigits: payment.currency === "RWF" ? 0 : 2,
+                    }).format(Number(payment.amount_minor || 0) / (payment.currency === "RWF" ? 1 : 100))} ${payment.currency}`,
+                    createdAt: payment.updated_at || payment.created_at,
+                    tab: "orders" as const,
+                })),
                 ...(subscriptionsResult.data || []).map((subscription) => ({
                     id: `subscription:${subscription.id}`,
                     kind: "subscription" as const,
@@ -91,6 +103,7 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
                 usersResult.error && `Accounts: ${usersResult.error.message}`,
                 ordersResult.error && `Orders: ${ordersResult.error.message}`,
                 paymentsResult.error && `Transactions: ${paymentsResult.error.message}`,
+                manualPaymentsResult.error && `Manual payments: ${manualPaymentsResult.error.message}`,
                 subscriptionsResult.error && `Subscriptions: ${subscriptionsResult.error.message}`,
             ].filter(Boolean);
             setLoadError(errors.join(" "));

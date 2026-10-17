@@ -47,29 +47,15 @@ class StripeProvider implements PaymentProvider {
     });
   }
 
-  async createPaymentIntent(amount: number, currency: string, metadata?: Record<string, any>): Promise<PaymentIntentResult> {
-    try {
-      const paymentIntent = await this.stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Convert to cents
-        currency: currency.toLowerCase(),
-        metadata,
-        automatic_payment_methods: {
-          enabled: true,
-        },
-      });
-
-      return {
-        success: true,
-        clientSecret: paymentIntent.client_secret || undefined,
-        paymentId: paymentIntent.id,
-      };
-    } catch (error: any) {
-      console.error('Stripe payment intent error:', error);
-      return {
-        success: false,
-        error: error.message || 'Failed to create payment intent',
-      };
-    }
+  async createPaymentIntent(
+    _amount: number,
+    _currency: string,
+    _metadata?: Record<string, any>,
+  ): Promise<PaymentIntentResult> {
+    return {
+      success: false,
+      error: 'Stripe is disabled for new purchases.',
+    };
   }
 
   async verifyPayment(paymentId: string): Promise<PaymentVerificationResult> {
@@ -174,7 +160,7 @@ class PaymentManager {
   }
 
   getAvailableProviders(): string[] {
-    return Array.from(this.providers.keys());
+    return ['mobile_money', 'binance'];
   }
 
   async createPayment(
@@ -182,6 +168,12 @@ class PaymentManager {
     order: Order,
     product: Product
   ): Promise<PaymentIntentResult> {
+    if (providerName !== 'mobile_money' && providerName !== 'binance') {
+      return {
+        success: false,
+        error: `Payment provider '${providerName}' is disabled for new purchases.`,
+      };
+    }
     const provider = this.getProvider(providerName);
     if (!provider) {
       return {

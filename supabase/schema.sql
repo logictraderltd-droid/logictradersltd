@@ -145,6 +145,53 @@ CREATE TABLE payments (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE manual_payment_requests (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  quote_id UUID NOT NULL UNIQUE,
+  order_id UUID NOT NULL UNIQUE REFERENCES orders(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES products(id),
+  method TEXT NOT NULL CHECK (method IN ('mobile_money', 'binance')),
+  amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+  currency TEXT NOT NULL CHECK (currency IN ('RWF', 'USDT')),
+  display_amount_minor INTEGER NOT NULL CHECK (display_amount_minor > 0),
+  display_currency TEXT NOT NULL CHECK (display_currency IN ('USD', 'RWF', 'USDT')),
+  original_amount_cents INTEGER NOT NULL CHECK (original_amount_cents > 0),
+  original_currency TEXT NOT NULL CHECK (original_currency = 'USD'),
+  exchange_rate NUMERIC(24, 12) NOT NULL CHECK (exchange_rate > 0),
+  rate_source TEXT NOT NULL CHECK (rate_source IN ('ExchangeRate-API', 'CoinGecko')),
+  rate_as_of TIMESTAMPTZ NOT NULL,
+  quote_issued_at TIMESTAMPTZ NOT NULL,
+  quote_expires_at TIMESTAMPTZ NOT NULL CHECK (quote_expires_at > quote_issued_at),
+  full_name TEXT NOT NULL,
+  sender_phone TEXT,
+  customer_binance_id TEXT,
+  transaction_reference TEXT,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'verifying', 'paid', 'rejected')),
+  verification_started_at TIMESTAMPTZ,
+  reviewed_by UUID REFERENCES users(id),
+  reviewed_at TIMESTAMPTZ,
+  rejection_reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT manual_payment_method_currency_contact_check CHECK (
+    (method = 'mobile_money' AND currency = 'RWF' AND sender_phone IS NOT NULL AND customer_binance_id IS NULL)
+    OR
+    (method = 'binance' AND currency = 'USDT' AND customer_binance_id IS NOT NULL AND sender_phone IS NULL)
+  ),
+  CONSTRAINT manual_payment_display_currency_check CHECK (
+    (method = 'mobile_money' AND display_currency IN ('USD', 'RWF'))
+    OR
+    (method = 'binance' AND display_currency IN ('USD', 'USDT'))
+  ),
+  CONSTRAINT manual_payment_rate_source_check CHECK (
+    (method = 'mobile_money' AND rate_source = 'ExchangeRate-API')
+    OR
+    (method = 'binance' AND rate_source = 'CoinGecko')
+  )
+);
+
 -- ============================================
 -- SUBSCRIPTIONS
 -- ============================================
@@ -397,13 +444,19 @@ CREATE POLICY "Admin can manage signals" ON signals
 CREATE POLICY "Users can view own orders" ON orders
   FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can create own orders" ON orders
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Admin can view all orders" ON orders
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
   );
+
+ALTER TABLE manual_payment_requests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view own manual payment requests" ON manual_payment_requests
+  FOR SELECT TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "Admins can view manual payment requests" ON manual_payment_requests
+  FOR SELECT TO authenticated USING (
+    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+  );
+GRANT SELECT ON manual_payment_requests TO authenticated;
 
 -- Payments policies
 CREATE POLICY "Users can view own payments" ON payments
@@ -474,6 +527,9 @@ CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_payments_updated_at BEFORE UPDATE ON payments
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER manual_payment_requests_updated_at BEFORE UPDATE ON manual_payment_requests
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON subscriptions

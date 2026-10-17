@@ -47,6 +47,18 @@ interface DashboardData {
   paymentHistory: Order[];
 }
 
+interface ManualPaymentRequestSummary {
+  id: string;
+  method: "mobile_money" | "binance";
+  amount_minor: number;
+  currency: "RWF" | "USDT";
+  display_amount_minor: number;
+  display_currency: "USD" | "RWF" | "USDT";
+  transaction_reference: string | null;
+  status: "pending" | "verifying" | "paid" | "rejected";
+  rejection_reason: string | null;
+}
+
 function DashboardContent() {
   const router = useRouter();
   const { user, profile, isAuthenticated, isLoading: authLoading, logout, refreshUser } = useAuth();
@@ -67,6 +79,9 @@ function DashboardContent() {
   const [passwordForm, setPasswordForm] = useState({ password: "", confirmPassword: "" });
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [paymentReferences, setPaymentReferences] = useState<Record<string, string>>({});
+  const [referenceSaving, setReferenceSaving] = useState<string | null>(null);
+  const [referenceError, setReferenceError] = useState("");
 
   useEffect(() => {
     setProfileForm({
@@ -198,6 +213,15 @@ function DashboardContent() {
           .select("order_id, status")
           .eq("user_id", user.id);
         const deliveryStatusByOrder = new Map((deliveryRows || []).map((row: any) => [row.order_id, row.status]));
+        const orderIds = (ordersData || []).map((order: any) => order.id);
+        const { data: paymentRequestRows, error: paymentRequestError } = orderIds.length
+          ? await supabase
+            .from("manual_payment_requests")
+            .select("id, order_id, method, amount_minor, currency, display_amount_minor, display_currency, transaction_reference, status, rejection_reason")
+            .in("order_id", orderIds)
+          : { data: [], error: null };
+        if (paymentRequestError) throw paymentRequestError;
+        const paymentRequestByOrder = new Map((paymentRequestRows || []).map((row: any) => [row.order_id, row]));
 
         setData({
           courses,
@@ -210,6 +234,7 @@ function DashboardContent() {
             currency: order.currency || order.product?.currency || "USD",
             product_type: order.product_type ?? order.product?.product_type ?? "course",
             delivery_status: deliveryStatusByOrder.get(order.id) ?? null,
+            manual_payment_request: paymentRequestByOrder.get(order.id) ?? null,
           })),
         });
       } catch (error) {
@@ -221,6 +246,44 @@ function DashboardContent() {
 
     fetchData();
   }, [user?.id]);
+
+  const submitPaymentReference = async (requestId: string, orderId: string) => {
+    const transactionReference = paymentReferences[requestId]?.trim() || "";
+    if (transactionReference.length < 3 || transactionReference.length > 120) {
+      setReferenceError("Enter a transaction reference between 3 and 120 characters.");
+      return;
+    }
+    setReferenceSaving(requestId);
+    setReferenceError("");
+    try {
+      const response = await fetch("/api/payments/manual/reference", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, transactionReference }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to submit reference.");
+      setData((current) => ({
+        ...current,
+        paymentHistory: current.paymentHistory.map((order) =>
+          order.id === orderId && order.manual_payment_request
+            ? {
+              ...order,
+              manual_payment_request: {
+                ...order.manual_payment_request,
+                transaction_reference: transactionReference,
+              },
+            }
+            : order,
+        ),
+      }));
+    } catch (error) {
+      console.error("Unable to submit payment reference:", error);
+      setReferenceError(error instanceof Error ? error.message : "Unable to submit reference.");
+    } finally {
+      setReferenceSaving(null);
+    }
+  };
 
   const handleProfileSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -705,6 +768,22 @@ function DashboardContent() {
                                 </td>
                                 <td className="px-6 py-4 text-white font-mono font-medium">
                                   {new Intl.NumberFormat('en-US', { style: 'currency', currency: order.currency }).format(order.amount)}
+                                  {order.manual_payment_request && (
+                                    <span className="block pt-1 text-xs font-normal text-gray-400">
+                                      Requested: {new Intl.NumberFormat('en-US', {
+                                        minimumFractionDigits: order.manual_payment_request.currency === 'RWF' ? 0 : 2,
+                                        maximumFractionDigits: order.manual_payment_request.currency === 'RWF' ? 0 : 2,
+                                      }).format(order.manual_payment_request.amount_minor / (order.manual_payment_request.currency === 'RWF' ? 1 : 100))} {order.manual_payment_request.currency}
+                                    </span>
+                                  )}
+                                  {order.manual_payment_request && (
+                                    <span className="block pt-1 text-xs font-normal text-gray-500">
+                                      Display quote: {new Intl.NumberFormat('en-US', {
+                                        minimumFractionDigits: order.manual_payment_request.display_currency === 'RWF' ? 0 : 2,
+                                        maximumFractionDigits: order.manual_payment_request.display_currency === 'RWF' ? 0 : 2,
+                                      }).format(order.manual_payment_request.display_amount_minor / (order.manual_payment_request.display_currency === 'RWF' ? 1 : 100))} {order.manual_payment_request.display_currency}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-6 py-4">
                                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${order.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
@@ -721,6 +800,41 @@ function DashboardContent() {
                                       Bot delivery: {order.delivery_status.replace('_', ' ')}
                                     </span>
                                   )}
+                                  {order.manual_payment_request && (
+                                    <div className="mt-1 text-xs">
+                                      <span className="capitalize text-gray-300">
+                                        Payment: {order.manual_payment_request.status === 'paid' ? 'verified' : order.manual_payment_request.status}
+                                      </span>
+                                      {order.manual_payment_request.rejection_reason && (
+                                        <p className="mt-1 max-w-xs text-red-300">{order.manual_payment_request.rejection_reason}</p>
+                                      )}
+                                      {order.manual_payment_request.transaction_reference && (
+                                        <p className="mt-1 text-gray-500">Reference: {order.manual_payment_request.transaction_reference}</p>
+                                      )}
+                                      {order.manual_payment_request.status === 'pending' && (
+                                        <div className="mt-2 space-y-1">
+                                          <input
+                                            value={paymentReferences[order.manual_payment_request.id] ?? order.manual_payment_request.transaction_reference ?? ""}
+                                            onChange={(event) => setPaymentReferences({
+                                              ...paymentReferences,
+                                              [order.manual_payment_request!.id]: event.target.value,
+                                            })}
+                                            placeholder="Transaction/reference ID"
+                                            className="dark-input w-48 text-xs"
+                                            aria-label="Transaction/reference ID"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => void submitPaymentReference(order.manual_payment_request!.id, order.id)}
+                                            disabled={referenceSaving === order.manual_payment_request.id}
+                                            className="block rounded border border-gold-500/50 px-2 py-1 text-xs text-gold-300 disabled:opacity-50"
+                                          >
+                                            {referenceSaving === order.manual_payment_request.id ? "Submitting..." : order.manual_payment_request.transaction_reference ? "Update reference" : "Submit reference"}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                   <button className="text-gray-500 hover:text-white transition-colors p-2 hover:bg-dark-800 rounded-lg">
@@ -729,6 +843,9 @@ function DashboardContent() {
                                 </td>
                               </tr>
                             ))}
+                            {referenceError && (
+                              <tr><td colSpan={5} className="px-6 py-2 text-sm text-red-300">{referenceError}</td></tr>
+                            )}
                             {data.paymentHistory.length === 0 && (
                               <tr>
                                 <td colSpan={5} className="px-6 py-16 text-center">

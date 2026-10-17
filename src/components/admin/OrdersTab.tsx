@@ -10,6 +10,29 @@ interface OrdersTabProps {
     onRefresh: () => void;
 }
 
+interface ManualPaymentRequest {
+    id: string;
+    method: 'mobile_money' | 'binance';
+    amount_minor: number;
+    currency: 'RWF' | 'USDT';
+    display_amount_minor: number;
+    display_currency: 'USD' | 'RWF' | 'USDT';
+    original_amount_cents: number;
+    original_currency: string;
+    exchange_rate: number;
+    rate_source: string;
+    rate_as_of: string;
+    quote_expires_at: string;
+    full_name: string;
+    sender_phone: string | null;
+    customer_binance_id: string | null;
+    transaction_reference: string | null;
+    status: 'pending' | 'verifying' | 'paid' | 'rejected';
+    reviewed_by: string | null;
+    reviewed_at: string | null;
+    rejection_reason: string | null;
+}
+
 export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
@@ -19,6 +42,11 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
     const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
     const [deliveryRequest, setDeliveryRequest] = useState<any | null>(null);
     const [deliveryLoading, setDeliveryLoading] = useState(false);
+    const [manualPayment, setManualPayment] = useState<ManualPaymentRequest | null>(null);
+    const [manualPaymentLoading, setManualPaymentLoading] = useState(false);
+    const [manualPaymentAction, setManualPaymentAction] = useState(false);
+    const [manualPaymentReason, setManualPaymentReason] = useState("");
+    const [manualPaymentError, setManualPaymentError] = useState("");
 
     useEffect(() => {
         let cancelled = false;
@@ -44,6 +72,71 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
         void loadDelivery();
         return () => { cancelled = true; };
     }, [selectedOrder]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadManualPayment = async () => {
+            if (!selectedOrder || !['mobile_money', 'binance'].includes(selectedOrder.payment_method || '')) {
+                setManualPayment(null);
+                setManualPaymentLoading(false);
+                setManualPaymentError("");
+                return;
+            }
+            setManualPaymentLoading(true);
+            setManualPaymentError("");
+            const { data, error } = await createBrowserClient()
+                .from('manual_payment_requests')
+                .select('*')
+                .eq('order_id', selectedOrder.id)
+                .maybeSingle();
+            if (error) {
+                console.error('Unable to load manual payment request:', error);
+                setManualPaymentError(error.message);
+            }
+            if (!cancelled) {
+                setManualPayment(data as ManualPaymentRequest | null);
+                setManualPaymentLoading(false);
+            }
+        };
+        void loadManualPayment();
+        return () => { cancelled = true; };
+    }, [selectedOrder]);
+
+    const reviewManualPayment = async (action: 'approve' | 'reject') => {
+        if (!manualPayment) return;
+        setManualPaymentAction(true);
+        setManualPaymentError("");
+        try {
+            const response = await fetch('/api/admin/payments/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    requestId: manualPayment.id,
+                    action,
+                    reason: manualPaymentReason,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to update payment verification.');
+            setManualPayment((current) => current
+                ? {
+                    ...current,
+                    status: action === 'approve' ? 'paid' : 'rejected',
+                    rejection_reason: action === 'reject' ? manualPaymentReason.trim() : null,
+                    reviewed_at: new Date().toISOString(),
+                }
+                : current);
+            if (action === 'approve' && selectedOrder) {
+                setSelectedOrder({ ...selectedOrder, status: 'completed' });
+            }
+            await onRefresh();
+        } catch (error) {
+            console.error('Unable to review manual payment:', error);
+            setManualPaymentError(error instanceof Error ? error.message : 'Unable to update payment verification.');
+        } finally {
+            setManualPaymentAction(false);
+        }
+    };
 
     const markDelivered = async () => {
         if (!selectedOrder) return;
@@ -198,7 +291,7 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
                         <div className="mt-auto pt-4 border-t border-dark-800 flex justify-between items-center">
                             <div className="flex flex-col">
                                 <span className="text-[10px] text-gray-500 uppercase font-bold">Total Amount</span>
-                                <span className="text-lg font-mono font-bold text-white">${Number(order.amount ?? (Number((order as any).amount_cents ?? 0) / 100)).toFixed(2)}</span>
+                                <span className="text-lg font-mono font-bold text-white">{new Intl.NumberFormat('en-US', { style: 'currency', currency: order.currency || 'USD' }).format(Number(order.amount ?? (Number((order as any).amount_cents ?? 0) / 100)))} </span>
                             </div>
                             <div className="flex gap-2">
                                 <button
@@ -263,7 +356,7 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
                                 </div>
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-gray-500 block mb-1">Amount</label>
-                                    <p className="text-lg font-mono font-bold text-white">${Number(selectedOrder.amount ?? (Number(selectedOrder.amount_cents ?? 0) / 100)).toFixed(2)}</p>
+                                    <p className="text-lg font-mono font-bold text-white">{new Intl.NumberFormat('en-US', { style: 'currency', currency: selectedOrder.currency || 'USD' }).format(Number(selectedOrder.amount ?? (Number(selectedOrder.amount_cents ?? 0) / 100)))}</p>
                                 </div>
                             </div>
 
@@ -283,6 +376,68 @@ export function OrdersTab({ orders, onRefresh }: OrdersTabProps) {
                                             )}
                                         </div>
                                     ) : <p className="text-sm text-gray-400">No delivery details are available for this order.</p>}
+                                </div>
+                            )}
+
+                            {['mobile_money', 'binance'].includes(selectedOrder.payment_method || '') && (
+                                <div className="rounded-xl border border-gold-500/20 bg-gold-500/5 p-4">
+                                    <h4 className="mb-3 font-semibold text-white">Manual payment verification</h4>
+                                    {manualPaymentLoading ? <p className="text-sm text-gray-400">Loading payment request...</p> : manualPayment ? (
+                                        <div className="space-y-2 text-sm">
+                                            <p>Method: <span className="text-white">{manualPayment.method === 'mobile_money' ? 'Mobile Money' : 'Binance Pay ID'}</span></p>
+                                            <p>Transfer amount: <span className="font-mono text-white">
+                                                {new Intl.NumberFormat('en-US', {
+                                                    minimumFractionDigits: manualPayment.currency === 'RWF' ? 0 : 2,
+                                                    maximumFractionDigits: manualPayment.currency === 'RWF' ? 0 : 2,
+                                                }).format(manualPayment.amount_minor / (manualPayment.currency === 'RWF' ? 1 : 100))} {manualPayment.currency}
+                                            </span></p>
+                                            <p>Original price: <span className="font-mono text-white">
+                                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: manualPayment.original_currency }).format(manualPayment.original_amount_cents / 100)}
+                                            </span></p>
+                                            <p>Customer display quote: <span className="font-mono text-white">
+                                                {new Intl.NumberFormat('en-US', {
+                                                    minimumFractionDigits: manualPayment.display_currency === 'RWF' ? 0 : 2,
+                                                    maximumFractionDigits: manualPayment.display_currency === 'RWF' ? 0 : 2,
+                                                }).format(manualPayment.display_amount_minor / (manualPayment.display_currency === 'RWF' ? 1 : 100))} {manualPayment.display_currency}
+                                            </span></p>
+                                            <p>Exchange rate: <span className="font-mono text-white">{Number(manualPayment.exchange_rate).toPrecision(8)} {manualPayment.currency} per USD</span></p>
+                                            <p>Rate source: <span className="text-white">{manualPayment.rate_source}</span></p>
+                                            <p>Rate timestamp: <span className="text-white">{new Date(manualPayment.rate_as_of).toLocaleString()}</span></p>
+                                            <p>Customer name: <span className="text-white">{manualPayment.full_name}</span></p>
+                                            {manualPayment.sender_phone && <p>Sender phone: <span className="font-mono text-white">{manualPayment.sender_phone}</span></p>}
+                                            {manualPayment.customer_binance_id && <p>Customer Binance ID: <span className="font-mono text-white">{manualPayment.customer_binance_id}</span></p>}
+                                            <p>Transaction/reference: <span className="font-mono text-white">{manualPayment.transaction_reference || 'Not submitted yet'}</span></p>
+                                            <p>Status: <span className="capitalize text-white">{manualPayment.status}</span></p>
+                                            {manualPayment.reviewed_by && <p>Reviewed by: <span className="font-mono text-white">{manualPayment.reviewed_by}</span></p>}
+                                            {manualPayment.reviewed_at && <p>Reviewed at: <span className="text-white">{new Date(manualPayment.reviewed_at).toLocaleString()}</span></p>}
+                                            {manualPayment.rejection_reason && <p className="text-red-300">Rejection reason: {manualPayment.rejection_reason}</p>}
+                                            {manualPayment.status === 'pending' && (
+                                                <div className="space-y-2 border-t border-dark-700 pt-3">
+                                                    <p className="text-xs text-gray-400">Confirm the transfer against the provider account and reference before approving.</p>
+                                                    {!manualPayment.transaction_reference && <p className="text-xs text-amber-300">A reference is required before approval.</p>}
+                                                    <label className="block text-xs text-gray-400" htmlFor="manual-payment-rejection-reason">Rejection reason (required only to reject)</label>
+                                                    <textarea
+                                                        id="manual-payment-rejection-reason"
+                                                        value={manualPaymentReason}
+                                                        onChange={(event) => setManualPaymentReason(event.target.value)}
+                                                        maxLength={500}
+                                                        className="dark-input min-h-20 w-full"
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <button type="button" disabled={manualPaymentAction || !manualPayment.transaction_reference} onClick={() => void reviewManualPayment('approve')} className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white disabled:opacity-50">
+                                                            {manualPaymentAction ? 'Checking...' : 'Approve and grant access'}
+                                                        </button>
+                                                        <button type="button" disabled={manualPaymentAction || manualPaymentReason.trim().length < 5} onClick={() => void reviewManualPayment('reject')} className="rounded-lg border border-red-500/50 px-4 py-2 font-semibold text-red-300 disabled:opacity-50">
+                                                            Reject payment
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {manualPaymentError && <p role="alert" className="text-red-300">{manualPaymentError}</p>}
+                                        </div>
+                                    ) : manualPaymentError
+                                        ? <p role="alert" className="text-sm text-red-300">{manualPaymentError}</p>
+                                        : <p className="text-sm text-gray-400">No manual payment request is linked to this order.</p>}
                                 </div>
                             )}
 
