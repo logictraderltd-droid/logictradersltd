@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Play, Clock, BarChart } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
+import { useNearViewport } from "@/lib/useNearViewport";
 
 interface FeaturedCourse {
   id: string;
@@ -45,28 +46,27 @@ const itemVariants = {
 export default function FeaturedCourses() {
   const [courses, setCourses] = useState<FeaturedCourse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { ref, hasEnteredViewport } = useNearViewport<HTMLElement>();
 
   useEffect(() => {
+    if (!hasEnteredViewport) return;
     const fetchFeaturedCourses = async () => {
       try {
         const supabase = createBrowserClient();
         const { data, error } = await supabase
           .from("products")
-          .select("*")
+          .select("id,name,description,price_cents,thumbnail_url,metadata,product_type,created_at")
           .eq("is_active", true)
-          .order("created_at", { ascending: false });
+          .eq("product_type", "course")
+          .order("created_at", { ascending: false })
+          .limit(3);
 
         if (error) throw error;
 
-        const courseItems = (data || []).filter((item: any) => {
-          const productType = (item.product_type ?? item.type ?? "").toString().toLowerCase();
-          return productType === "course";
-        }).slice(0, 3);
-
-        setCourses(courseItems.map((item: any) => ({
+        setCourses((data || []).map((item: any) => ({
           ...item,
-          type: item.product_type ?? "course",
-          price: Number(item.price ?? (Number(item.price_cents ?? 0) / 100)),
+          type: item.product_type,
+          price: Number(item.price_cents ?? 0) / 100,
         })));
       } catch (error) {
         console.error("Unable to load featured courses:", error);
@@ -77,10 +77,10 @@ export default function FeaturedCourses() {
     };
 
     fetchFeaturedCourses();
-  }, []);
+  }, [hasEnteredViewport]);
 
   return (
-    <section className="py-14 sm:py-20 bg-dark-950">
+    <section ref={ref} className="py-14 sm:py-20 bg-dark-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

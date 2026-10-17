@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, TrendingUp, Bell, Zap } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
+import { useNearViewport } from "@/lib/useNearViewport";
 
 interface SignalPlanItem {
   id: string;
@@ -38,28 +39,28 @@ const itemVariants = {
 export default function FeaturedSignals() {
   const [plans, setPlans] = useState<SignalPlanItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { ref, hasEnteredViewport } = useNearViewport<HTMLElement>();
 
   useEffect(() => {
+    if (!hasEnteredViewport) return;
     const fetchFeaturedPlans = async () => {
       try {
         const supabase = createBrowserClient();
         const { data, error } = await supabase
           .from("products")
-          .select("*")
+          .select("id,name,description,price_cents,metadata,product_type,created_at")
           .eq("is_active", true)
-          .order("created_at", { ascending: false });
+          .eq("product_type", "signal")
+          .order("created_at", { ascending: false })
+          .limit(2);
 
         if (error) throw error;
 
-        const signalItems = (data || [])
-          .filter((item: any) => (item.product_type ?? item.type ?? "").toString().toLowerCase() === "signal")
-          .slice(0, 2);
-
-        setPlans(signalItems
+        setPlans((data || [])
           .map((item: any) => ({
             ...item,
-            price: Number(item.price ?? (Number(item.price_cents ?? 0) / 100)),
-            type: item.product_type ?? item.type ?? "signal",
+            price: Number(item.price_cents ?? 0) / 100,
+            type: item.product_type,
           }))
           .sort((a: any, b: any) => Number(a.price ?? 0) - Number(b.price ?? 0)));
       } catch (error) {
@@ -71,10 +72,10 @@ export default function FeaturedSignals() {
     };
 
     fetchFeaturedPlans();
-  }, []);
+  }, [hasEnteredViewport]);
 
   return (
-    <section className="py-20 bg-dark-900/50">
+    <section ref={ref} className="py-20 bg-dark-900/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

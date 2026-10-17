@@ -182,6 +182,7 @@ export default function AdminDashboard() {
 
         <AdminHeader
           onMenuClick={() => setSidebarOpen(true)}
+          onNavigate={setActiveTab}
           title={activeTab}
         />
 
