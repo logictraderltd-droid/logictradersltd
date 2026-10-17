@@ -169,7 +169,11 @@ export async function createManualPaymentQuote(
   return { quote, token: `${payload}.${signature}` };
 }
 
-export function verifyManualPaymentQuote(token: string, userId: string): ManualPaymentQuote {
+export function verifyManualPaymentQuote(
+  token: string,
+  userId: string,
+  options: { allowExpired?: boolean } = {},
+): ManualPaymentQuote {
   const [payload, signature, ...extra] = token.split(".");
   if (!payload || !signature || extra.length > 0) throw new Error("Invalid payment quote.");
   const expected = createHmac("sha256", getQuoteSecret()).update(payload).digest();
@@ -201,7 +205,9 @@ export function verifyManualPaymentQuote(token: string, userId: string): ManualP
       !Number.isSafeInteger(quote.displayAmountMinor) || quote.displayAmountMinor <= 0 ||
       !Number.isFinite(quote.exchangeRate) || quote.exchangeRate <= 0 ||
       !Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) ||
-      expiresAt <= Date.now() || issuedAt > Date.now() + 60_000) {
+      expiresAt <= issuedAt ||
+      (!options.allowExpired && expiresAt <= Date.now()) ||
+      issuedAt > Date.now() + 60_000) {
     throw new Error("The payment quote is invalid or expired. Request a new quote.");
   }
   return quote;

@@ -27,7 +27,12 @@ function getPaymentRequestErrorMessage(error: unknown, stage: string) {
   if (/\borders\b/i.test(details) &&
       (["42P01", "42703", "PGRST204", "PGRST205"].includes(code) ||
         /(does not exist|not found|schema cache|could not find)/i.test(details))) {
-    return "Order storage is not fully set up. Ask the site administrator to apply the platform integration migration to production Supabase.";
+    return "Payment order storage is not set up. Ask the site administrator to apply supabase/migrations/2026-10-18-manual-payment-order-support.sql to the production Supabase project.";
+  }
+  if (/user_access|platform_payment_transactions/i.test(details) &&
+      (["42P01", "42703", "PGRST204", "PGRST205"].includes(code) ||
+        /(does not exist|not found|schema cache|could not find)/i.test(details))) {
+    return "Payment approval storage is not set up. Ask the site administrator to apply supabase/migrations/2026-10-18-manual-payment-order-support.sql to the production Supabase project.";
   }
   if (/bot_delivery_requests/i.test(details) &&
       (["42P01", "42703", "PGRST204", "PGRST205"].includes(code) ||
@@ -123,7 +128,7 @@ export async function POST(request: Request) {
     let quote: ManualPaymentQuote;
     stage = "checking the quote";
     try {
-      quote = verifyManualPaymentQuote(token, user.id);
+      quote = verifyManualPaymentQuote(token, user.id, { allowExpired: true });
     } catch (error) {
       return NextResponse.json({
         error: error instanceof Error ? error.message : "The payment quote is invalid or expired.",
@@ -173,6 +178,23 @@ export async function POST(request: Request) {
         Number(product.price_cents) !== quote.originalAmountCents ||
         String(product.currency || "USD").toUpperCase() !== quote.originalCurrency) {
       return NextResponse.json({ error: "The product price changed or this product is unavailable. Request a new quote." }, { status: 409 });
+    }
+    if (product.product_type === "course") {
+      stage = "checking existing course access";
+      const { data: access, error: accessError } = await admin
+        .from("user_access")
+        .select("expires_at")
+        .eq("user_id", user.id)
+        .eq("product_id", product.id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (accessError) throw accessError;
+      if (access && (!access.expires_at || new Date(access.expires_at) > new Date())) {
+        return NextResponse.json({
+          error: "You already have access to this course. Open it from your dashboard instead of paying again.",
+          alreadyHasAccess: true,
+        }, { status: 409 });
+      }
     }
 
     stage = "checking for an existing payment";

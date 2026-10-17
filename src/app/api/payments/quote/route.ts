@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const { data: product, error: productError } = await admin
       .from("products")
-      .select("id, price_cents, currency, is_active, metadata")
+      .select("id, product_type, price_cents, currency, is_active, metadata")
       .eq("id", productId)
       .maybeSingle();
     if (productError) throw productError;
@@ -57,6 +57,22 @@ export async function POST(request: Request) {
     }
     if (product.metadata?.is_free === true) {
       return NextResponse.json({ error: "Free products do not require checkout." }, { status: 400 });
+    }
+    if (product.product_type === "course") {
+      const { data: access, error: accessError } = await admin
+        .from("user_access")
+        .select("expires_at")
+        .eq("user_id", user.id)
+        .eq("product_id", product.id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (accessError) throw accessError;
+      if (access && (!access.expires_at || new Date(access.expires_at) > new Date())) {
+        return NextResponse.json({
+          error: "You already have access to this course.",
+          alreadyHasAccess: true,
+        }, { status: 409 });
+      }
     }
 
     const { quote, token } = await createManualPaymentQuote({

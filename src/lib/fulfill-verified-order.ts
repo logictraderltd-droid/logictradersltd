@@ -112,9 +112,12 @@ export async function fulfillVerifiedOrder(payment: VerifiedOrderPayment) {
     const accessPayload: Record<string, unknown> = {
       user_id: payment.userId,
       product_id: payment.productId,
+      product_type: payment.productType,
       order_id: payment.orderId,
+      granted_by: "payment",
       is_active: true,
       expires_at: expiresAt,
+      access_expires_at: expiresAt,
     };
     const { error: accessError } = await supabase
       .from("user_access")

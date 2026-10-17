@@ -48,6 +48,7 @@ interface PaymentRequest {
   senderPhone: string | null;
   customerBinanceId: string | null;
   transactionReference: string | null;
+  rejectionReason?: string | null;
   status: string;
 }
 
@@ -136,6 +137,10 @@ function CheckoutContent() {
           signal: controller.signal,
         });
         const data = await response.json();
+        if (data.alreadyHasAccess && product.type === "course") {
+          router.replace(`/dashboard/courses/${product.id}`);
+          return;
+        }
         if (!response.ok) throw new Error(data.error || "Unable to get a current payment quote.");
         setQuote(data);
       } catch (error) {
@@ -148,7 +153,39 @@ function CheckoutContent() {
     };
     void loadQuote();
     return () => controller.abort();
-  }, [product?.id, product?.metadata?.is_free, isAuthenticated, paymentMethod, displayCurrency, quoteVersion, paymentRequest]);
+  }, [product?.id, product?.type, product?.metadata?.is_free, isAuthenticated, paymentMethod, displayCurrency, quoteVersion, paymentRequest, router]);
+
+  useEffect(() => {
+    if (!paymentRequest || !["pending", "verifying"].includes(paymentRequest.status)) return;
+    let cancelled = false;
+    const requestId = paymentRequest.id;
+    const interval = window.setInterval(() => {
+      void (async () => {
+        const { data, error } = await createBrowserClient()
+          .from("manual_payment_requests")
+          .select("status, rejection_reason")
+          .eq("id", requestId)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error || !data) {
+          console.error("Unable to refresh manual payment status:", error);
+          setRequestError("Unable to refresh payment status right now. Check your dashboard later.");
+          window.clearInterval(interval);
+          return;
+        }
+        setPaymentRequest((current) => current?.id === requestId
+          ? { ...current, status: data.status, rejectionReason: data.rejection_reason }
+          : current);
+        if (data.status === "paid" && product?.type === "course") {
+          router.replace(`/dashboard/courses/${product.id}`);
+        }
+      })();
+    }, 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [paymentRequest?.id, paymentRequest?.status, product?.id, product?.type, router]);
 
   const copyValue = async (value: string, item: string) => {
     try {
@@ -178,7 +215,6 @@ function CheckoutContent() {
       router.push(`/login?redirect=/checkout?product=${product.id}`);
       return;
     }
-    if (!ensureQuoteIsCurrent()) return;
     if (fullName.trim().length < 2) {
       setRequestError("Enter your full name so the administrator can identify your payment.");
       return;
@@ -323,8 +359,15 @@ function CheckoutContent() {
                     <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
                       <h2 className="text-xl font-bold text-white">Payment sent for admin verification</h2>
                       <p className="mt-2 text-sm text-amber-200">
-                        Request status: {paymentRequest.status}. Your access will be enabled only after an administrator confirms your payment.
+                        Request status: {paymentRequest.status === "verifying" ? "under review" : paymentRequest.status}.
+                        {paymentRequest.status !== "paid" && " This page checks for admin approval automatically."}
                       </p>
+                      {paymentRequest.status === "rejected" && paymentRequest.rejectionReason && (
+                        <p className="mt-2 text-sm text-red-300">Admin note: {paymentRequest.rejectionReason}</p>
+                      )}
+                      {paymentRequest.status === "paid" && (
+                        <p className="mt-2 text-sm text-green-300">Payment approved. Your course access is being opened.</p>
+                      )}
                       <p className="mt-2 text-sm text-gray-300">
                         Order #{paymentRequest.orderId.slice(0, 8)} · {paymentRequest.amount} · Reference{" "}
                         <span className="font-mono text-white">{paymentRequest.transactionReference}</span>
@@ -333,6 +376,7 @@ function CheckoutContent() {
                     <p className="text-sm text-gray-400">
                       You can check the verification status in your dashboard. Do not send the payment a second time.
                     </p>
+                    {requestError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">{requestError}</p>}
                     <Link href="/dashboard?tab=payments" className="inline-block text-sm text-gold-300 underline">
                       View payment status
                     </Link>
