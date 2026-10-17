@@ -24,6 +24,14 @@ BEGIN
 END;
 $$;
 
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS amount NUMERIC(10, 2);
+
+UPDATE public.orders
+SET amount = amount_cents::NUMERIC / 100
+WHERE amount IS NULL
+  AND amount_cents IS NOT NULL;
+
 UPDATE public.orders AS orders
 SET product_type = products.product_type
 FROM public.products AS products
