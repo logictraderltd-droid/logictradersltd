@@ -190,12 +190,9 @@ export function AdminHeader({ onMenuClick, title, onNavigate }: AdminHeaderProps
             });
 
         const interval = window.setInterval(() => void loadNotifications(), 60_000);
-        const handleFocus = () => void loadNotifications();
-        window.addEventListener("focus", handleFocus);
 
         return () => {
             window.clearInterval(interval);
-            window.removeEventListener("focus", handleFocus);
             void supabase.removeChannel(channel);
         };
     }, [loadNotifications]);
