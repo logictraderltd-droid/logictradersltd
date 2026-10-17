@@ -7,6 +7,31 @@ import { createAdminClient } from "@/lib/supabase";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 
+function getPaymentRequestErrorMessage(error: unknown) {
+  const record = error && typeof error === "object"
+    ? error as { code?: unknown; message?: unknown; details?: unknown }
+    : null;
+  const code = typeof record?.code === "string" ? record.code : "";
+  const details = [
+    record?.message,
+    record?.details,
+    error instanceof Error ? error.message : null,
+  ].filter((value): value is string => typeof value === "string").join(" ");
+
+  if (/manual_payment_requests/i.test(details) &&
+      (["42P01", "42703", "PGRST204", "PGRST205"].includes(code) ||
+        /(does not exist|not found|schema cache|could not find)/i.test(details))) {
+    return "Payment setup is incomplete. Ask the site administrator to apply supabase/migrations/2026-10-18-manual-payments.sql to the production Supabase project.";
+  }
+  if (/SUPABASE_SERVICE_ROLE_KEY|service role key is missing/i.test(details)) {
+    return "The payment service is not fully configured. Contact the site administrator.";
+  }
+  if (code === "42501" || /permission denied|not authorized/i.test(details)) {
+    return "The payment service could not access the order database. Contact the site administrator.";
+  }
+  return "Unable to save your payment request. No payment was confirmed. Retry, or use the Mobile Money fallback below and contact the site administrator with your transaction reference.";
+}
+
 function paymentRequestResponse(request: {
   id: string;
   order_id: string;
@@ -257,6 +282,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ request: paymentRequestResponse(paymentRequest), reused: false });
   } catch (error) {
     console.error("Unable to create manual payment request:", error);
-    return NextResponse.json({ error: "Unable to create payment request." }, { status: 500 });
+    return NextResponse.json({ error: getPaymentRequestErrorMessage(error) }, { status: 500 });
   }
 }
