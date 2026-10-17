@@ -214,12 +214,8 @@ export default function Hero() {
           console.error("Homepage marketing live updates are unavailable:", status);
         }
       });
-    const handleWindowFocus = () => void loadMarketingContent();
-    window.addEventListener("focus", handleWindowFocus);
-
     return () => {
       isMounted = false;
-      window.removeEventListener("focus", handleWindowFocus);
       void supabase.removeChannel(channel);
     };
   }, []);

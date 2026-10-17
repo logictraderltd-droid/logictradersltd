@@ -16,6 +16,7 @@ import {
   Send,
 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
+import { withVisibleRequestTimeout } from "@/lib/visibleRequestTimeout";
 
 interface ShortItem {
   id: string;
@@ -38,6 +39,7 @@ const SUPABASE_KEY = "marketing_content";
 
 const defaultShorts: ShortItem[] = [];
 const defaultSocialLinks: SocialItem[] = [];
+let marketingContentCache: { shorts: ShortItem[]; socialLinks: SocialItem[] } | null = null;
 
 const createId = () => Math.random().toString(36).slice(2, 10);
 
@@ -77,9 +79,10 @@ function getPlatformIcon(platform: SocialItem["platform"]) {
 }
 
 export function MarketingTab() {
-  const [shorts, setShorts] = useState<ShortItem[]>([]);
-  const [socialLinks, setSocialLinks] = useState<SocialItem[]>([]);
+  const [shorts, setShorts] = useState<ShortItem[]>(() => marketingContentCache?.shorts ?? []);
+  const [socialLinks, setSocialLinks] = useState<SocialItem[]>(() => marketingContentCache?.socialLinks ?? []);
   const [shortDraft, setShortDraft] = useState({
+    id: "",
     title: "",
     description: "",
     video_url: "",
@@ -87,6 +90,7 @@ export function MarketingTab() {
     thumbnail_url: "",
   });
   const [socialDraft, setSocialDraft] = useState({
+    id: "",
     label: "",
     href: "",
     platform: "custom" as SocialItem["platform"],
@@ -103,18 +107,24 @@ export function MarketingTab() {
       setIsLoadingContent(true);
       try {
         const supabase = createBrowserClient();
-        const { data, error } = await supabase
-          .from("site_content")
-          .select("value")
-          .eq("key", SUPABASE_KEY)
-          .maybeSingle();
+        const { data, error } = await withVisibleRequestTimeout((signal) =>
+          supabase
+            .from("site_content")
+            .select("value")
+            .eq("key", SUPABASE_KEY)
+            .abortSignal(signal)
+            .maybeSingle(),
+        20_000);
 
         if (error && error.code !== "PGRST116") throw error;
 
         const content = data?.value ?? { shorts: defaultShorts, socialLinks: defaultSocialLinks };
+        const loadedShorts = Array.isArray(content.shorts) ? content.shorts : defaultShorts;
+        const loadedLinks = Array.isArray(content.socialLinks) ? content.socialLinks : defaultSocialLinks;
+        marketingContentCache = { shorts: loadedShorts, socialLinks: loadedLinks };
         if (!isMounted) return;
-        setShorts(Array.isArray(content.shorts) ? content.shorts : defaultShorts);
-        setSocialLinks(Array.isArray(content.socialLinks) ? content.socialLinks : defaultSocialLinks);
+        setShorts(loadedShorts);
+        setSocialLinks(loadedLinks);
         setIsContentLoaded(true);
         setNotification(null);
       } catch (error) {
@@ -142,14 +152,18 @@ export function MarketingTab() {
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
-      .from("site_content")
-      .upsert(payload, { onConflict: "key" });
+    const { error } = await withVisibleRequestTimeout((signal) =>
+      supabase
+        .from("site_content")
+        .upsert(payload, { onConflict: "key" })
+        .abortSignal(signal),
+    20_000);
 
     if (error) {
       console.error("Marketing save failed:", error);
       throw error;
     }
+    marketingContentCache = { shorts: nextShorts, socialLinks: nextLinks };
   };
 
   const addShort = async () => {
@@ -165,7 +179,7 @@ export function MarketingTab() {
     }
 
     const nextShort: ShortItem = {
-      id: createId(),
+      id: shortDraft.id || createId(),
       title: shortDraft.title.trim(),
       description: shortDraft.description.trim(),
       type: "short",
@@ -180,9 +194,10 @@ export function MarketingTab() {
     try {
       await persistContent(nextShorts, nextLinks);
       setShorts(nextShorts);
-      setShortDraft({ title: "", description: "", video_url: "", source: "youtube", thumbnail_url: "" });
+      setShortDraft({ id: "", title: "", description: "", video_url: "", source: "youtube", thumbnail_url: "" });
       setNotification({ type: "success", message: "Market short added and saved." });
     } catch (error) {
+      setShortDraft((current) => ({ ...current, id: nextShort.id }));
       setNotification({ type: "error", message: `Short was not saved: ${getErrorMessage(error, "Please retry.")}` });
     } finally {
       setIsSaving(false);
@@ -204,7 +219,7 @@ export function MarketingTab() {
     }
 
     const nextLink: SocialItem = {
-      id: createId(),
+      id: socialDraft.id || createId(),
       label: finalLabel,
       href: finalHref,
       platform: socialDraft.platform,
@@ -216,9 +231,10 @@ export function MarketingTab() {
     try {
       await persistContent(nextShorts, nextLinks);
       setSocialLinks(nextLinks);
-      setSocialDraft({ label: "", href: "", platform: "custom" });
+      setSocialDraft({ id: "", label: "", href: "", platform: "custom" });
       setNotification({ type: "success", message: "Social link added and saved." });
     } catch (error) {
+      setSocialDraft((current) => ({ ...current, id: nextLink.id }));
       setNotification({ type: "error", message: `Social link was not saved: ${getErrorMessage(error, "Please retry.")}` });
     } finally {
       setIsSaving(false);

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { CldUploadWidget } from "next-cloudinary";
 import { Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
+import { VisibleRequestTimeoutError, withVisibleRequestTimeout } from "@/lib/visibleRequestTimeout";
 
 interface CFDBlocker {
   id: string;
@@ -30,31 +31,6 @@ const emptyForm = (): BlockerForm => ({
   sort_order: 0,
 });
 
-class SaveTimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(`The save request timed out after ${timeoutMs / 1000} seconds.`);
-    this.name = "SaveTimeoutError";
-  }
-}
-
-function withRequestTimeout<T>(
-  request: (signal: AbortSignal) => PromiseLike<T>,
-  timeoutMs: number,
-): Promise<T> {
-  const controller = new AbortController();
-  let timeoutId: number | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timeoutId = window.setTimeout(() => {
-      controller.abort();
-      reject(new SaveTimeoutError(timeoutMs));
-    }, timeoutMs);
-  });
-  const pending = Promise.resolve().then(() => request(controller.signal));
-  return Promise.race([pending, timeout]).finally(() => {
-    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-  });
-}
-
 function matchesSavedData(item: CFDBlocker, form: BlockerForm) {
   return item.id === form.id &&
     item.name === form.name &&
@@ -67,7 +43,7 @@ function matchesSavedData(item: CFDBlocker, form: BlockerForm) {
 }
 
 function isUncertainWriteError(error: unknown) {
-  if (error instanceof SaveTimeoutError) return true;
+  if (error instanceof VisibleRequestTimeoutError) return true;
   if (error instanceof TypeError) return true;
   return error instanceof Error && error.name === "AbortError";
 }
@@ -164,7 +140,7 @@ export function CFDBlockersTab() {
       const supabase = createBrowserClient();
       let data: CFDBlocker;
       try {
-        const result = await withRequestTimeout((signal) =>
+        const result = await withVisibleRequestTimeout((signal) =>
           supabase
             .from("cfd_blockers")
             .upsert(payload, { onConflict: "id" })
@@ -178,7 +154,7 @@ export function CFDBlockersTab() {
         setNotice("The save response was delayed. Checking whether the database completed the save…");
         let reconciliation;
         try {
-          reconciliation = await withRequestTimeout((signal) =>
+          reconciliation = await withVisibleRequestTimeout((signal) =>
             supabase
               .from("cfd_blockers")
               .select("*")
