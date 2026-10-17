@@ -47,37 +47,40 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    const { data: existingRequest, error: existingError } = await admin
-      .from("manual_payment_requests")
-      .select("id, order_id, method, amount_minor, currency, display_amount_minor, display_currency, original_amount_cents, original_currency, exchange_rate, rate_source, rate_as_of, quote_expires_at, sender_phone, customer_binance_id, transaction_reference, status")
-      .eq("user_id", user.id)
-      .eq("product_id", productId)
-      .in("status", ["pending", "verifying"])
-      .maybeSingle();
-    if (existingError) throw existingError;
-    if (existingRequest) {
-      return NextResponse.json({
-        existingRequest: {
-          id: existingRequest.id,
-          orderId: existingRequest.order_id,
-          method: existingRequest.method,
-          amountMinor: existingRequest.amount_minor,
-          currency: existingRequest.currency,
-          amount: formatSettlementAmount(existingRequest.amount_minor, existingRequest.currency),
-          displayAmount: formatSettlementAmount(existingRequest.display_amount_minor, existingRequest.display_currency),
-          displayCurrency: existingRequest.display_currency,
-          originalAmount: existingRequest.original_amount_cents / 100,
-          originalCurrency: existingRequest.original_currency,
-          exchangeRate: Number(existingRequest.exchange_rate),
-          rateSource: existingRequest.rate_source,
-          rateAsOf: existingRequest.rate_as_of,
-          quoteExpiresAt: existingRequest.quote_expires_at,
-          senderPhone: existingRequest.sender_phone,
-          customerBinanceId: existingRequest.customer_binance_id,
-          transactionReference: existingRequest.transaction_reference,
-          status: existingRequest.status,
-        },
-      });
+    if (method === "binance") {
+      const { data: existingRequest, error: existingError } = await admin
+        .from("manual_payment_requests")
+        .select("id, order_id, method, amount_minor, currency, display_amount_minor, display_currency, original_amount_cents, original_currency, exchange_rate, rate_source, rate_as_of, quote_expires_at, sender_phone, customer_binance_id, transaction_reference, status")
+        .eq("user_id", user.id)
+        .eq("product_id", productId)
+        .eq("method", method)
+        .in("status", ["pending", "verifying"])
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (existingRequest) {
+        return NextResponse.json({
+          existingRequest: {
+            id: existingRequest.id,
+            orderId: existingRequest.order_id,
+            method: existingRequest.method,
+            amountMinor: existingRequest.amount_minor,
+            currency: existingRequest.currency,
+            amount: formatSettlementAmount(existingRequest.amount_minor, existingRequest.currency),
+            displayAmount: formatSettlementAmount(existingRequest.display_amount_minor, existingRequest.display_currency),
+            displayCurrency: existingRequest.display_currency,
+            originalAmount: existingRequest.original_amount_cents / 100,
+            originalCurrency: existingRequest.original_currency,
+            exchangeRate: Number(existingRequest.exchange_rate),
+            rateSource: existingRequest.rate_source,
+            rateAsOf: existingRequest.rate_as_of,
+            quoteExpiresAt: existingRequest.quote_expires_at,
+            senderPhone: existingRequest.sender_phone,
+            customerBinanceId: existingRequest.customer_binance_id,
+            transactionReference: existingRequest.transaction_reference,
+            status: existingRequest.status,
+          },
+        });
+      }
     }
 
     const { data: product, error: productError } = await admin

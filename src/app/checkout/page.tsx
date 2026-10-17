@@ -77,7 +77,6 @@ function CheckoutContent() {
   const [mt5AccountNumber, setMt5AccountNumber] = useState("");
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [requestError, setRequestError] = useState("");
-  const [canUseManualDialFallback, setCanUseManualDialFallback] = useState(false);
   const [isSavingReference, setIsSavingReference] = useState(false);
   const [copiedItem, setCopiedItem] = useState("");
 
@@ -208,9 +207,6 @@ function CheckoutContent() {
 
     setIsProcessing(true);
     setRequestError("");
-    setCanUseManualDialFallback(false);
-    let isServerFailure = false;
-    let responseReceived = false;
     try {
       const response = await fetch("/api/payments/manual/create", {
         method: "POST",
@@ -225,17 +221,12 @@ function CheckoutContent() {
           mt5AccountNumber,
         }),
       });
-      responseReceived = true;
-      isServerFailure = response.status >= 500;
       const data = await response.json();
       if (!response.ok) {
         if (data.refreshQuote) {
           setQuote(null);
           setQuoteError("");
           setQuoteVersion((version) => version + 1);
-        }
-        if (response.status >= 500 && paymentMethod === "mobile_money") {
-          setCanUseManualDialFallback(true);
         }
         throw new Error(data.error || "Unable to create a payment request.");
       }
@@ -244,9 +235,6 @@ function CheckoutContent() {
       setPaymentRequest(data.request);
     } catch (error) {
       console.error("Manual payment request failed:", error);
-      if ((isServerFailure || !responseReceived) && paymentMethod === "mobile_money") {
-        setCanUseManualDialFallback(true);
-      }
       setRequestError(error instanceof Error ? error.message : "Unable to create a payment request.");
     } finally {
       setIsProcessing(false);
@@ -417,19 +405,14 @@ function CheckoutContent() {
                       </div>
                     )}
 
+                    {paymentMethod === "binance" && (
                     <div className="mb-6 space-y-4 rounded-lg border border-dark-700 bg-dark-800/40 p-4">
                       <label className="block space-y-1 text-sm text-gray-400">Your full name
                         <input value={fullName} onChange={(event) => setFullName(event.target.value)} className="dark-input w-full" autoComplete="name" required />
                       </label>
-                      {paymentMethod === "mobile_money" ? (
-                        <label className="block space-y-1 text-sm text-gray-400">Your Mobile Money sender phone number
-                          <input value={senderPhone} onChange={(event) => setSenderPhone(event.target.value)} className="dark-input w-full" autoComplete="tel" placeholder="+250..." required />
-                        </label>
-                      ) : (
-                        <label className="block space-y-1 text-sm text-gray-400">Your Binance ID
-                          <input value={customerBinanceId} onChange={(event) => setCustomerBinanceId(event.target.value)} className="dark-input w-full" autoComplete="off" required />
-                        </label>
-                      )}
+                      <label className="block space-y-1 text-sm text-gray-400">Your Binance ID
+                        <input value={customerBinanceId} onChange={(event) => setCustomerBinanceId(event.target.value)} className="dark-input w-full" autoComplete="off" required />
+                      </label>
                       <label className="block space-y-1 text-sm text-gray-400">Transaction/reference ID (if available)
                         <input value={transactionReference} onChange={(event) => setTransactionReference(event.target.value)} className="dark-input w-full" autoComplete="off" placeholder="You can submit this after sending" />
                       </label>
@@ -445,6 +428,7 @@ function CheckoutContent() {
                         </>
                       )}
                     </div>
+                    )}
 
                     {quoteLoading && <p className="mb-4 text-sm text-gray-400">Getting a current server-calculated exchange-rate quote...</p>}
                     {quoteError && (
@@ -454,14 +438,12 @@ function CheckoutContent() {
                       </div>
                     )}
                     {requestError && <p role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{requestError}</p>}
-                    {canUseManualDialFallback && paymentMethod === "mobile_money" && quote && (
-                      <div className="mb-4 space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
-                        <p className="font-semibold">You can send the quoted amount directly by Mobile Money</p>
-                        <p>
-                          Amount: <strong>{quote.quote.amount}</strong>. The dial code is valid only until{" "}
-                          {new Date(quote.quote.expiresAt).toLocaleTimeString()}.
-                        </p>
-                        <p className="break-all font-mono text-white">
+                    {paymentMethod === "mobile_money" && quote && (
+                      <div className="mb-4 space-y-3 rounded-lg border border-gold-500/40 bg-gold-500/10 p-4 text-sm text-gray-200">
+                        <p className="font-semibold text-white">Pay directly by Mobile Money</p>
+                        <p>Send exactly <strong className="text-white">{quote.quote.amount}</strong> before the quote expires at{" "}
+                          {new Date(quote.quote.expiresAt).toLocaleTimeString()}.</p>
+                        <p className="break-all font-mono text-lg text-white">
                           {`${MOMO_USSD}*${quote.quote.amountMinor}#`}
                         </p>
                         <div className="flex flex-wrap gap-2">
@@ -470,7 +452,6 @@ function CheckoutContent() {
                             onClick={(event) => {
                               if (Date.parse(quote.quote.expiresAt) <= Date.now()) {
                                 event.preventDefault();
-                                setCanUseManualDialFallback(false);
                                 setRequestError("This quote has expired. Get a fresh quote before sending payment.");
                                 setQuote(null);
                                 setQuoteVersion((version) => version + 1);
@@ -478,31 +459,34 @@ function CheckoutContent() {
                             }}
                             className="inline-flex items-center gap-2 rounded-lg bg-gold-500 px-4 py-2 font-semibold text-dark-950"
                           >
-                            Dial exact amount <ExternalLink className="h-4 w-4" />
+                            Dial Mobile Money <ExternalLink className="h-4 w-4" />
                           </a>
                           <button
                             type="button"
-                            onClick={() => void copyValue(`${MOMO_USSD}*${quote.quote.amountMinor}#`, "fallback-ussd")}
+                            onClick={() => void copyValue(`${MOMO_USSD}*${quote.quote.amountMinor}#`, "ussd")}
                             className="inline-flex items-center gap-2 rounded-lg border border-dark-600 px-4 py-2 text-white"
                           >
-                            <Copy className="h-4 w-4" /> {copiedItem === "fallback-ussd" ? "Copied" : "Copy dial code"}
+                            <Copy className="h-4 w-4" /> {copiedItem === "ussd" ? "Copied" : "Copy dial code"}
                           </button>
                         </div>
-                        <p className="text-xs text-amber-200">
-                          This direct transfer does not create a website order or confirm payment. Keep the Mobile Money
-                          transaction SMS/reference and contact the site administrator to have the payment matched and
-                          verified. Product access is not granted until verification.
+                        <p className="text-xs text-gray-400">
+                          This direct transfer does not create a website order or grant access. Keep the transaction SMS/reference
+                          and contact the site administrator to have the payment matched and verified.
                         </p>
                       </div>
                     )}
-                    {!isAuthenticated && <p className="mb-4 text-center text-sm text-gray-400">Sign in to request a payment quote and place an order.</p>}
-                    <button type="button" onClick={handleCheckout}
-                      disabled={isProcessing || (isAuthenticated && (!quote || Boolean(quoteError)))}
-                      className="w-full gold-button flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                      {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" /><span>Creating request...</span></> :
-                        <span>Create payment request{quote ? ` · ${quote.quote.amount}` : ""}</span>}
-                    </button>
-                    <p className="mt-3 text-xs text-center text-gray-500">Creating a request does not confirm payment or grant product access.</p>
+                    {!isAuthenticated && <p className="mb-4 text-center text-sm text-gray-400">Sign in to get a current payment quote and continue checkout.</p>}
+                    {paymentMethod === "binance" && (
+                      <>
+                        <button type="button" onClick={handleCheckout}
+                          disabled={isProcessing || (isAuthenticated && (!quote || Boolean(quoteError)))}
+                          className="w-full gold-button flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                          {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" /><span>Creating request...</span></> :
+                            <span>Create payment request{quote ? ` · ${quote.quote.amount}` : ""}</span>}
+                        </button>
+                        <p className="mt-3 text-xs text-center text-gray-500">Creating a request does not confirm payment or grant product access.</p>
+                      </>
+                    )}
                   </>
                 ) : (
                   <div className="space-y-5">
