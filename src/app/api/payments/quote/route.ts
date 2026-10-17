@@ -8,6 +8,24 @@ import { createAdminClient } from "@/lib/supabase";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 
+function getQuoteErrorMessage(error: unknown) {
+  const record = error && typeof error === "object"
+    ? error as { code?: unknown; message?: unknown }
+    : null;
+  const code = typeof record?.code === "string" ? record.code : "";
+  const detail = typeof record?.message === "string"
+    ? record.message
+    : error instanceof Error
+      ? error.message
+      : "";
+
+  if (["42P01", "42703", "PGRST200", "PGRST204", "PGRST205"].includes(code) ||
+      /manual_payment_requests/i.test(detail) && /(does not exist|not found|schema cache|could not find)/i.test(detail)) {
+    return "Payment setup is incomplete. Apply supabase/migrations/2026-10-18-manual-payments.sql to the Supabase project and retry.";
+  }
+  return detail || "Unable to obtain a current payment quote.";
+}
+
 export async function POST(request: Request) {
   try {
     const authClient = await createServerSupabaseClient();
@@ -95,7 +113,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Unable to create payment quote:", error);
-    const message = error instanceof Error ? error.message : "Unable to obtain a current payment quote.";
+    const message = getQuoteErrorMessage(error);
     return NextResponse.json({ error: message }, { status: 503 });
   }
 }
