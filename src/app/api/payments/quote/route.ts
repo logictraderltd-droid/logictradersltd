@@ -6,6 +6,7 @@ import {
 } from "@/lib/manual-payments";
 import { createAdminClient } from "@/lib/supabase";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getPlatformSettings } from "@/lib/platform-settings";
 import { NextResponse } from "next/server";
 
 function getQuoteErrorMessage(error: unknown) {
@@ -39,6 +40,11 @@ export async function POST(request: Request) {
     const displayCurrency = body.displayCurrency;
     if (!productId || (method !== "mobile_money" && method !== "binance")) {
       return NextResponse.json({ error: "Select a product and supported payment method." }, { status: 400 });
+    }
+    const settings = await getPlatformSettings();
+    if ((method === "mobile_money" && !settings.mobileMoneyEnabled) ||
+        (method === "binance" && !settings.binanceEnabled)) {
+      return NextResponse.json({ error: "This payment method is currently unavailable. Choose another method." }, { status: 403 });
     }
     const supportedDisplayCurrencies = method === "mobile_money" ? ["USD", "RWF"] : ["USD", "USDT"];
     if (!supportedDisplayCurrencies.includes(displayCurrency)) {

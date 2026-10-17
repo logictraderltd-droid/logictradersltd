@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { TrendingUp, Mail, Phone, MapPin, Twitter, Youtube, MessageCircle } from "lucide-react";
 
@@ -33,6 +34,25 @@ const socialLinks = [
 ];
 
 export default function Footer() {
+  const [platformName, setPlatformName] = useState("LOGICTRADERSLTD");
+  const [supportEmail, setSupportEmail] = useState("logictradersltd@gmail.com");
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/platform-settings", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load public platform details.");
+        return response.json();
+      })
+      .then(({ settings }) => {
+        if (cancelled || !settings) return;
+        if (typeof settings.platformName === "string") setPlatformName(settings.platformName);
+        if (typeof settings.supportEmail === "string") setSupportEmail(settings.supportEmail);
+      })
+      .catch((error) => console.error("Unable to load footer contact settings:", error));
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <footer className="bg-dark-950 border-t border-dark-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -44,7 +64,7 @@ export default function Footer() {
                 <TrendingUp className="w-6 h-6 text-dark-950" />
               </div>
               <span className="text-xl font-bold gold-gradient-text">
-                LOGICTRADERSLTD
+                {platformName}
               </span>
             </Link>
             <p className="text-gray-400 text-sm mb-6 max-w-sm">
@@ -56,7 +76,7 @@ export default function Footer() {
             <div className="space-y-3">
               <div className="flex items-center space-x-3 text-sm text-gray-400">
                 <Mail className="w-4 h-4 text-gold-400" />
-                <span>logictradersltd@gmail.com</span>
+               <a href={`mailto:${supportEmail}`} className="hover:text-white">{supportEmail}</a>
               </div>
               <div className="flex items-center space-x-3 text-sm text-gray-400">
                 <Phone className="w-4 h-4 text-gold-400" />
@@ -124,7 +144,7 @@ export default function Footer() {
         {/* Bottom Bar */}
         <div className="mt-12 pt-8 border-t border-dark-800 flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
           <p className="text-sm text-gray-500">
-            © {new Date().getFullYear()} LOGICTRADERSLTD. All rights reserved.
+            © {new Date().getFullYear()} {platformName}. All rights reserved.
           </p>
           
           {/* Social Links */}

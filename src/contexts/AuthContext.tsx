@@ -222,6 +222,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('📝 Attempting registration for:', email);
       setIsLoading(true);
 
+      const settingsResponse = await fetch('/api/platform-settings', { cache: 'no-store' });
+      const settingsResult = await settingsResponse.json();
+      if (!settingsResponse.ok) {
+        throw new Error(settingsResult.error || 'Unable to check registration availability.');
+      }
+      if (settingsResult.settings?.registrationsOpen === false) {
+        setIsLoading(false);
+        return { error: 'New account registration is currently closed.' };
+      }
+
       // Sign up the user with Supabase Auth
       const { data, error } = await supabase.auth.signUp({
         email,

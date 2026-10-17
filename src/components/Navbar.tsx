@@ -19,6 +19,7 @@ const navLinks = [
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [platformName, setPlatformName] = useState("LOGICTRADERSLTD");
   const { user, profile, isAuthenticated, isLoading } = useAuth();
   const dashboardHref = user?.role === "admin" ? "/admin" : "/dashboard";
   const displayName = (
@@ -44,6 +45,22 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/platform-settings", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load public platform name.");
+        return response.json();
+      })
+      .then(({ settings }) => {
+        if (!cancelled && typeof settings?.platformName === "string") {
+          setPlatformName(settings.platformName);
+        }
+      })
+      .catch((error) => console.error("Unable to load navbar platform name:", error));
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <motion.nav
       initial={{ y: -100 }}
@@ -63,7 +80,7 @@ export default function Navbar() {
               <TrendingUp className="w-6 h-6 text-dark-950" />
             </div>
             <span className="text-xl font-bold gold-gradient-text hidden sm:block">
-              LOGICTRADERSLTD
+              {platformName}
             </span>
           </Link>
 

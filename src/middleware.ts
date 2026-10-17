@@ -75,6 +75,49 @@ export async function middleware(request: NextRequest) {
   console.log(`[Middleware] Path: ${pathname}`);
   console.log(`[Middleware] User found: ${!!user}, ID: ${user?.id}`);
 
+  const isAdminSurface = pathname === '/admin' ||
+    pathname.startsWith('/admin/') ||
+    pathname === '/api/admin' ||
+    pathname.startsWith('/api/admin/');
+  const maintenanceExempt = pathname === '/maintenance' ||
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/api/webhooks/') ||
+    pathname === '/api/platform-settings' ||
+    isAdminSurface;
+
+  if (!maintenanceExempt) {
+    const { data: settingsRow, error: settingsError } = await supabase
+      .from('site_content')
+      .select('value')
+      .eq('key', 'platform_settings')
+      .maybeSingle();
+
+    if (settingsError) {
+      console.error('Unable to check site maintenance mode:', settingsError);
+    } else if (settingsRow?.value?.maintenanceMode === true) {
+      if (user) {
+        const { data: userData, error: roleError } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (roleError) {
+          console.error('Unable to check admin access during maintenance:', roleError);
+        } else if (userData?.role === 'admin') {
+          return response;
+        }
+      }
+
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'The site is temporarily under maintenance.' }, { status: 503 });
+      }
+      return NextResponse.redirect(new URL('/maintenance', request.url));
+    }
+  }
+
   // Check if route is public
   const isPublicRoute = PUBLIC_ROUTES.some(route =>
     pathname === route || pathname.startsWith(route + '/')

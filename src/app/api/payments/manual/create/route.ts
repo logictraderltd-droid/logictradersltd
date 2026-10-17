@@ -5,6 +5,7 @@ import {
 } from "@/lib/manual-payments";
 import { createAdminClient } from "@/lib/supabase";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getPlatformSettings } from "@/lib/platform-settings";
 import { NextResponse } from "next/server";
 
 function getPaymentRequestErrorMessage(error: unknown, stage: string) {
@@ -164,6 +165,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Enter your own Binance ID, not the recipient ID." }, { status: 400 });
       }
       customerBinanceId = binanceId;
+    }
+
+    const settings = await getPlatformSettings();
+    if ((quote.method === "mobile_money" && !settings.mobileMoneyEnabled) ||
+        (quote.method === "binance" && !settings.binanceEnabled)) {
+      return NextResponse.json({ error: "This payment method is currently unavailable. Choose another method." }, { status: 403 });
     }
 
     const admin = createAdminClient();

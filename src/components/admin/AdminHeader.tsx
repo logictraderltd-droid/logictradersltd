@@ -33,6 +33,7 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [activities, setActivities] = useState<AdminActivity[]>([]);
+    const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [lastViewedAt, setLastViewedAt] = useState(0);
     const isFetchingRef = useRef(false);
@@ -42,6 +43,19 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
         isFetchingRef.current = true;
         setIsLoading(true);
         try {
+            const settingsResponse = await fetch("/api/platform-settings", { cache: "no-store" });
+            const settingsResult = await settingsResponse.json();
+            if (!settingsResponse.ok) {
+                throw new Error(settingsResult.error || "Unable to load notification settings.");
+            }
+            if (settingsResult.settings?.adminNotificationsEnabled === false) {
+                setNotificationsEnabled(false);
+                setActivities([]);
+                setLoadError("");
+                return;
+            }
+            setNotificationsEnabled(true);
+
             const supabase = createBrowserClient();
             const [usersResult, ordersResult, paymentsResult, manualPaymentsResult, subscriptionsResult] = await Promise.all([
                 supabase.from("users").select("id,email,full_name,created_at,updated_at").order("updated_at", { ascending: false }).limit(10),
@@ -134,10 +148,13 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
         const refreshOnFocus = () => {
             if (document.visibilityState === "visible") void loadActivities();
         };
+        const refreshSettings = () => void loadActivities();
         window.addEventListener("focus", refreshOnFocus);
+        window.addEventListener("platform-settings-updated", refreshSettings);
         return () => {
             window.clearInterval(refreshTimer);
             window.removeEventListener("focus", refreshOnFocus);
+            window.removeEventListener("platform-settings-updated", refreshSettings);
         };
     }, [loadActivities]);
 
@@ -174,7 +191,9 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
                     <button
                         type="button"
                         onClick={toggleNotifications}
-                        aria-label={`Recent activity${unreadCount ? `, ${unreadCount} unread` : ""}`}
+                        aria-label={notificationsEnabled
+                            ? `Recent activity${unreadCount ? `, ${unreadCount} unread` : ""}`
+                            : "Recent activity notifications are disabled"}
                         aria-expanded={isOpen}
                         className="relative p-2 text-gray-400 hover:text-white transition-colors"
                     >
@@ -195,7 +214,9 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
                                 {isLoading && activities.length === 0 ? (
                                     <p className="px-4 py-8 text-center text-sm text-gray-400">Loading recent activity...</p>
                                 ) : activities.length === 0 ? (
-                                    <p className="px-4 py-8 text-center text-sm text-gray-400">{loadError ? "Activity could not be loaded." : "No recent activity."}</p>
+                                    <p className="px-4 py-8 text-center text-sm text-gray-400">
+                                        {loadError ? "Activity could not be loaded." : notificationsEnabled ? "No recent activity." : "Notifications are disabled in Settings."}
+                                    </p>
                                 ) : activities.map((activity) => (
                                     <button
                                         key={activity.id}

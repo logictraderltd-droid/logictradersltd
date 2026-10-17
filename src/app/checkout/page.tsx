@@ -64,6 +64,12 @@ function CheckoutContent() {
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mobile_money");
+  const [paymentSettingsLoaded, setPaymentSettingsLoaded] = useState(false);
+  const [availablePaymentMethods, setAvailablePaymentMethods] = useState({
+    mobile_money: false,
+    binance: false,
+  });
+  const [paymentSettingsError, setPaymentSettingsError] = useState("");
   const [displayCurrency, setDisplayCurrency] = useState<"USD" | "RWF" | "USDT">("USD");
   const [quote, setQuote] = useState<PaymentQuote | null>(null);
   const [quoteVersion, setQuoteVersion] = useState(0);
@@ -84,6 +90,41 @@ function CheckoutContent() {
     if (user?.email) setEmail(user.email);
     if (user?.full_name) setFullName(user.full_name);
   }, [user?.email, user?.full_name]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPaymentSettings = async () => {
+      try {
+        const response = await fetch("/api/platform-settings", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Unable to load payment methods.");
+        if (!cancelled) {
+          setAvailablePaymentMethods({
+            mobile_money: result.settings?.mobileMoneyEnabled === true,
+            binance: result.settings?.binanceEnabled === true,
+          });
+          setPaymentSettingsError("");
+        }
+      } catch (error) {
+        console.error("Unable to load checkout payment methods:", error);
+        if (!cancelled) {
+          setAvailablePaymentMethods({ mobile_money: false, binance: false });
+          setPaymentSettingsError(error instanceof Error ? error.message : "Unable to load payment methods.");
+        }
+      } finally {
+        if (!cancelled) setPaymentSettingsLoaded(true);
+      }
+    };
+    void loadPaymentSettings();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!paymentSettingsLoaded) return;
+    if (availablePaymentMethods[paymentMethod]) return;
+    if (availablePaymentMethods.mobile_money) setPaymentMethod("mobile_money");
+    else if (availablePaymentMethods.binance) setPaymentMethod("binance");
+  }, [paymentSettingsLoaded, availablePaymentMethods, paymentMethod]);
 
   useEffect(() => {
     if (!productId) {
@@ -117,9 +158,12 @@ function CheckoutContent() {
   }, [productId, router]);
 
   useEffect(() => {
-    if (!product?.id || !isAuthenticated || product.metadata?.is_free === true || paymentRequest) {
+    if (!product?.id || !isAuthenticated || product.metadata?.is_free === true || paymentRequest ||
+        !paymentSettingsLoaded || !availablePaymentMethods[paymentMethod]) {
       setQuote(null);
-      setQuoteError("");
+      setQuoteError(paymentSettingsLoaded && !availablePaymentMethods.mobile_money && !availablePaymentMethods.binance
+        ? paymentSettingsError || "Checkout is temporarily unavailable. Contact the site administrator."
+        : "");
       setQuoteLoading(false);
       return;
     }
@@ -153,7 +197,7 @@ function CheckoutContent() {
     };
     void loadQuote();
     return () => controller.abort();
-  }, [product?.id, product?.type, product?.metadata?.is_free, isAuthenticated, paymentMethod, displayCurrency, quoteVersion, paymentRequest, router]);
+  }, [product?.id, product?.type, product?.metadata?.is_free, isAuthenticated, paymentMethod, displayCurrency, quoteVersion, paymentRequest, router, paymentSettingsLoaded, availablePaymentMethods, paymentSettingsError]);
 
   useEffect(() => {
     if (!paymentRequest || !["pending", "verifying"].includes(paymentRequest.status)) return;
@@ -401,29 +445,44 @@ function CheckoutContent() {
                       </select>
                     </label>
 
-                    <div className="space-y-3 mb-6">
-                      <button type="button" onClick={() => { setQuote(null); setPaymentMethod("mobile_money"); setDisplayCurrency("USD"); }}
-                        className={`w-full flex items-center space-x-3 p-4 rounded-lg border transition-all ${paymentMethod === "mobile_money" ? "border-gold-500 bg-gold-500/10" : "border-dark-700 hover:border-dark-600"}`}>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === "mobile_money" ? "border-gold-500" : "border-gray-500"}`}>
-                          {paymentMethod === "mobile_money" && <div className="w-2.5 h-2.5 rounded-full bg-gold-500" />}
-                        </div>
-                        <div className="flex-1 text-left">
-                          <span className="font-medium">Mobile Money · RWF</span>
-                          <p className="text-xs text-gray-500">MTN Rwanda · manual payment confirmation</p>
-                        </div>
-                        <span className="text-2xl">📱</span>
-                      </button>
-                      <button type="button" onClick={() => { setQuote(null); setPaymentMethod("binance"); setDisplayCurrency("USD"); }}
-                        className={`w-full flex items-center space-x-3 p-4 rounded-lg border transition-all ${paymentMethod === "binance" ? "border-gold-500 bg-gold-500/10" : "border-dark-700 hover:border-dark-600"}`}>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === "binance" ? "border-gold-500" : "border-gray-500"}`}>
-                          {paymentMethod === "binance" && <div className="w-2.5 h-2.5 rounded-full bg-gold-500" />}
-                        </div>
-                        <div className="flex-1 text-left">
-                          <span className="font-medium">Binance ID · USDT</span>
-                          <p className="text-xs text-gray-500">Binance Pay ID transfer · manual confirmation</p>
-                        </div>
-                        <span className="text-2xl">🟡</span>
-                      </button>
+                    <div className="mb-6 space-y-3">
+                      {!paymentSettingsLoaded ? (
+                        <p className="rounded-lg border border-dark-700 p-4 text-sm text-gray-400">Loading available payment methods...</p>
+                      ) : (
+                        <>
+                          {availablePaymentMethods.mobile_money && (
+                            <button type="button" onClick={() => { setQuote(null); setPaymentMethod("mobile_money"); setDisplayCurrency("USD"); }}
+                              className={`w-full flex items-center space-x-3 p-4 rounded-lg border transition-all ${paymentMethod === "mobile_money" ? "border-gold-500 bg-gold-500/10" : "border-dark-700 hover:border-dark-600"}`}>
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === "mobile_money" ? "border-gold-500" : "border-gray-500"}`}>
+                                {paymentMethod === "mobile_money" && <div className="w-2.5 h-2.5 rounded-full bg-gold-500" />}
+                              </div>
+                              <div className="flex-1 text-left">
+                                <span className="font-medium">Mobile Money · RWF</span>
+                                <p className="text-xs text-gray-500">MTN Rwanda · manual payment confirmation</p>
+                              </div>
+                              <span className="text-2xl">📱</span>
+                            </button>
+                          )}
+                          {availablePaymentMethods.binance && (
+                            <button type="button" onClick={() => { setQuote(null); setPaymentMethod("binance"); setDisplayCurrency("USD"); }}
+                              className={`w-full flex items-center space-x-3 p-4 rounded-lg border transition-all ${paymentMethod === "binance" ? "border-gold-500 bg-gold-500/10" : "border-dark-700 hover:border-dark-600"}`}>
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === "binance" ? "border-gold-500" : "border-gray-500"}`}>
+                                {paymentMethod === "binance" && <div className="w-2.5 h-2.5 rounded-full bg-gold-500" />}
+                              </div>
+                              <div className="flex-1 text-left">
+                                <span className="font-medium">Binance ID · USDT</span>
+                                <p className="text-xs text-gray-500">Binance Pay ID transfer · manual confirmation</p>
+                              </div>
+                              <span className="text-2xl">🟡</span>
+                            </button>
+                          )}
+                          {!availablePaymentMethods.mobile_money && !availablePaymentMethods.binance && (
+                            <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+                              {paymentSettingsError || "Checkout is temporarily unavailable. Contact the site administrator."}
+                            </p>
+                          )}
+                        </>
+                      )}
                     </div>
 
                     <div className="mb-6 space-y-4 rounded-lg border border-dark-700 bg-dark-800/40 p-4">
