@@ -38,6 +38,7 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
     const [loadError, setLoadError] = useState("");
     const [lastViewedAt, setLastViewedAt] = useState(0);
     const [readActivityKeys, setReadActivityKeys] = useState<Set<string>>(new Set());
+    const [hasLoadedReadState, setHasLoadedReadState] = useState(false);
     const isFetchingRef = useRef(false);
 
     const activityKey = (activity: AdminActivity) => `${activity.id}:${activity.createdAt}`;
@@ -150,6 +151,8 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
             }
         } catch (error) {
             console.error("Unable to read notification view state:", error);
+        } finally {
+            setHasLoadedReadState(true);
         }
 
         void loadActivities();
@@ -173,6 +176,19 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
         !readActivityKeys.has(activityKey(activity)) && Date.parse(activity.createdAt) > lastViewedAt
     );
     const unreadCount = visibleActivities.length;
+
+    useEffect(() => {
+        if (!isOpen || !hasLoadedReadState || visibleActivities.length === 0) return;
+
+        const nextReadKeys = new Set(readActivityKeys);
+        visibleActivities.forEach((activity) => nextReadKeys.add(activityKey(activity)));
+        setReadActivityKeys(nextReadKeys);
+        try {
+            window.localStorage.setItem(READ_ACTIVITIES_KEY, JSON.stringify(Array.from(nextReadKeys)));
+        } catch (error) {
+            console.error("Unable to persist seen notifications:", error);
+        }
+    }, [isOpen, hasLoadedReadState, visibleActivities, readActivityKeys]);
 
     const toggleNotifications = () => {
         if (!isOpen && visibleActivities.length > 0) {
