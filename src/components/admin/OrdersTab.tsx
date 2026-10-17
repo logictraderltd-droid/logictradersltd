@@ -103,6 +103,15 @@ export function OrdersTab({ orders, loadError, onRefresh }: OrdersTabProps) {
         return () => { cancelled = true; };
     }, [selectedOrder]);
 
+    useEffect(() => {
+        if (!selectedOrder) return;
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setSelectedOrder(null);
+        };
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [selectedOrder]);
+
     const reviewManualPayment = async (action: 'approve' | 'reject') => {
         if (!manualPayment) return;
         setManualPaymentAction(true);
@@ -351,18 +360,28 @@ export function OrdersTab({ orders, loadError, onRefresh }: OrdersTabProps) {
 
             {/* Order Details Modal */}
             {selectedOrder && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-between p-6 border-b border-dark-800">
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) setSelectedOrder(null);
+                    }}
+                >
+                    <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-dark-700 bg-dark-900 shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="flex shrink-0 items-center justify-between border-b border-dark-800 p-4">
                             <h3 className="text-xl font-bold text-white flex items-center gap-2">
                                 <CreditCard className="w-5 h-5 text-gold-500" />
                                 Order Details
                             </h3>
-                            <button onClick={() => setSelectedOrder(null)} className="text-gray-500 hover:text-white transition-colors">
+                            <button
+                                type="button"
+                                aria-label="Close order details"
+                                onClick={() => setSelectedOrder(null)}
+                                className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-dark-800 hover:text-white"
+                            >
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-                        <div className="p-6 space-y-6 text-gray-300">
+                        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 text-gray-300">
                             <div className="grid grid-cols-2 gap-6">
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-gray-500 block mb-1">Order ID</label>

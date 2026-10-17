@@ -7,6 +7,8 @@ export async function POST(request: Request) {
   let claimedRequestId: string | null = null;
   let claimedAt: string | null = null;
   let fulfillmentCompleted = false;
+  let stage = "checking admin authentication";
+  const supportReference = crypto.randomUUID();
 
   try {
     const authClient = await createServerSupabaseClient();
@@ -32,6 +34,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+    stage = "loading payment request";
     const { data: paymentRequest, error: lookupError } = await admin
       .from("manual_payment_requests")
       .select("*")
@@ -45,6 +48,7 @@ export async function POST(request: Request) {
       if (reason.length < 5 || reason.length > 500) {
         return NextResponse.json({ error: "Enter a rejection reason between 5 and 500 characters." }, { status: 400 });
       }
+      stage = "saving rejection";
       const { data: rejected, error: rejectError } = await admin
         .from("manual_payment_requests")
         .update({
@@ -94,6 +98,7 @@ export async function POST(request: Request) {
     claimedRequestId = requestId;
     claimedAt = now;
 
+    stage = "checking linked order";
     const { data: order, error: orderError } = await admin
       .from("orders")
       .select("id, user_id, product_id, product_type, amount_cents, currency, status")
@@ -108,6 +113,7 @@ export async function POST(request: Request) {
       throw new Error("Payment request does not match a payable order.");
     }
 
+    stage = "granting access and recording payment";
     await fulfillVerifiedOrder({
       orderId: order.id,
       userId: order.user_id,
@@ -123,6 +129,7 @@ export async function POST(request: Request) {
     fulfillmentCompleted = true;
 
     const verifiedAt = new Date().toISOString();
+    stage = "saving approved payment status";
     const { data: verified, error: verifyError } = await admin
       .from("manual_payment_requests")
       .update({
@@ -152,7 +159,24 @@ export async function POST(request: Request) {
         .eq("verification_started_at", claimedAt);
       if (releaseError) console.error("Unable to release payment verification claim:", releaseError);
     }
-    console.error("Unable to verify manual payment:", error);
-    return NextResponse.json({ error: "Unable to verify payment request." }, { status: 500 });
+    const record = error && typeof error === "object"
+      ? error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown }
+      : null;
+    const databaseMessage = [
+      record?.message,
+      record?.details,
+      record?.hint,
+      error instanceof Error ? error.message : null,
+    ].filter((value): value is string => typeof value === "string").join(" ");
+    console.error("Unable to verify manual payment:", {
+      supportReference,
+      stage,
+      code: record?.code,
+      message: databaseMessage || String(error),
+    });
+    return NextResponse.json({
+      error: `Could not complete payment approval while ${stage}. ${databaseMessage || "Check the server logs for details."}`,
+      supportReference,
+    }, { status: 500 });
   }
 }
