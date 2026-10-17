@@ -67,9 +67,13 @@ const mapUserProfile = (data: any): UserProfile => {
 };
 
 // Client-side Supabase client - safe to use in browser
-export const createBrowserClient = () => {
+export const createBrowserClient = (fetcher?: typeof fetch) => {
   const { supabaseUrl, supabaseKey } = getSupabaseConfig();
-  return createSSRBrowserClient(supabaseUrl, supabaseKey);
+  return createSSRBrowserClient(
+    supabaseUrl,
+    supabaseKey,
+    fetcher ? { isSingleton: false, global: { fetch: fetcher } } : undefined
+  );
 };
 
 // Admin Supabase client (for server-side operations only)

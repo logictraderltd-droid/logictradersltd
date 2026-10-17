@@ -57,36 +57,49 @@ const typeConfig: Record<ProFirmMediaType, ProFirmTypeConfig> = {
 const createId = () => crypto.randomUUID();
 const CONTENT_REQUEST_TIMEOUT_MS = 15_000;
 
-function withRequestTimeout<T>(request: PromiseLike<T>, message: string, timeoutMs = CONTENT_REQUEST_TIMEOUT_MS): Promise<T> {
-  let timeout: number | undefined;
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs);
-  });
-  return Promise.race([Promise.resolve(request), timeoutPromise]).finally(() => {
-    if (timeout !== undefined) window.clearTimeout(timeout);
-  });
+function createTimedSupabaseClient(timeoutMs: number, timeoutMessage: string) {
+  const controller = new AbortController();
+  let didTimeout = false;
+  const timeout = window.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
+  const client = createBrowserClient((input, init) =>
+    fetch(input, { ...init, signal: controller.signal })
+  );
+
+  return {
+    client,
+    didTimeout: () => didTimeout,
+    timeoutMessage,
+    dispose: () => window.clearTimeout(timeout),
+  };
 }
 
 async function fetchPersistedProFirmContent(timeoutMs = CONTENT_REQUEST_TIMEOUT_MS): Promise<ProFirmContent | null> {
-  const supabase = createBrowserClient();
-  const { data, error } = await withRequestTimeout(
-    supabase
+  const request = createTimedSupabaseClient(timeoutMs, "Loading Pro Firm content timed out. Check your connection and retry.");
+  try {
+    const { data, error } = await request.client
       .from("site_content")
       .select("value")
       .eq("key", SUPABASE_KEY)
-      .maybeSingle(),
-    "Loading Pro Firm content timed out. Check your connection and retry.",
-    timeoutMs
-  );
-  if (error && error.code !== "PGRST116") throw error;
-  if (!data?.value) return null;
-  const value = data.value as Partial<ProFirmContent>;
-  return {
-    ...defaultContent,
-    ...value,
-    photos: Array.isArray(value.photos) ? value.photos : [],
-    videos: Array.isArray(value.videos) ? value.videos : [],
-  };
+      .maybeSingle();
+    if (request.didTimeout()) throw new Error(request.timeoutMessage);
+    if (error && error.code !== "PGRST116") throw error;
+    if (!data?.value) return null;
+    const value = data.value as Partial<ProFirmContent>;
+    return {
+      ...defaultContent,
+      ...value,
+      photos: Array.isArray(value.photos) ? value.photos : [],
+      videos: Array.isArray(value.videos) ? value.videos : [],
+    };
+  } catch (error) {
+    if (request.didTimeout()) throw new Error(request.timeoutMessage);
+    throw error;
+  } finally {
+    request.dispose();
+  }
 }
 
 const isImageUrl = (value: string) => {
@@ -190,20 +203,21 @@ export function ProFirmTab() {
     if (pendingWriteRef.current) {
       throw new Error("The previous database request is still running. Wait for it to finish before retrying.");
     }
-    const supabase = createBrowserClient();
+    const request = createTimedSupabaseClient(
+      CONTENT_REQUEST_TIMEOUT_MS,
+      "The save request timed out; the database may still complete it."
+    );
     const payload = {
       key: SUPABASE_KEY,
       value: nextContent,
       updated_at: new Date().toISOString(),
     };
     const writePromise = (async () => {
-      const { data, error } = await supabase
+      const { error } = await request.client
         .from("site_content")
-        .upsert(payload, { onConflict: "key" })
-        .select("key")
-        .single();
+        .upsert(payload, { onConflict: "key" });
+      if (request.didTimeout()) throw new Error(request.timeoutMessage);
       if (error) throw error;
-      if (data?.key !== SUPABASE_KEY) throw new Error("The database did not confirm the Pro Firm save.");
     })();
 
     pendingWriteRef.current = writePromise;
@@ -217,11 +231,13 @@ export function ProFirmTab() {
     void writePromise.then(clearPendingWrite, clearPendingWrite);
 
     try {
-      await withRequestTimeout(writePromise, "The save request timed out; the database may still complete it.");
+      await writePromise;
       uncertainWriteRef.current = false;
     } catch (error) {
       uncertainWriteRef.current = true;
       throw error;
+    } finally {
+      request.dispose();
     }
   };
 
@@ -322,7 +338,7 @@ export function ProFirmTab() {
       } catch (reconcileError) {
         console.error("Unable to reconcile Pro Firm item save:", reconcileError);
       }
-      setNotification({ type: "error", message: `The save was not confirmed. Your details are preserved. If the request is still running, retry will become available when it settles. ${error instanceof Error ? error.message : "Unexpected database error."}` });
+      setNotification({ type: "error", message: `The save was not confirmed. Your details are preserved. Retry will first check whether this item was already saved. ${error instanceof Error ? error.message : "Unexpected database error."}` });
     } finally {
       isSavingRef.current = false;
       setIsLoading(false);
