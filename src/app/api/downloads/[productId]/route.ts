@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
+import { createAdminClient } from '@/lib/supabase';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+
+function getDownloadSetupError(error: unknown) {
+  const dbError = error as { code?: string; message?: string };
+  const details = `${dbError?.code || ''} ${dbError?.message || ''}`.toLowerCase();
+  if (details.includes('download_tokens') &&
+      (details.includes('pgrst205') || details.includes('42p01') || details.includes('schema cache'))) {
+    return 'Bot downloads are not enabled in the database yet. Please contact support.';
+  }
+  return 'Unable to prepare this bot download. Please try again or contact support.';
+}
 
 export async function GET(
   request: NextRequest,
@@ -19,8 +31,10 @@ export async function GET(
       );
     }
 
+    const admin = createAdminClient();
+
     // Verify product is a bot
-    const { data: product, error: productError } = await supabase
+    const { data: product, error: productError } = await admin
       .from('products')
       .select('id, name, product_type, metadata')
       .eq('id', productId)
@@ -42,7 +56,7 @@ export async function GET(
     }
 
     // Check user access
-    const { data: accessData, error: accessError } = await supabase
+    const { data: accessData, error: accessError } = await admin
       .from('user_access')
       .select('expires_at')
       .eq('user_id', user.id)
@@ -68,7 +82,7 @@ export async function GET(
     }
 
     // Get bot details
-    const { data: bot, error: botError } = await supabase
+    const { data: bot, error: botError } = await admin
       .from('bot_links')
       .select('download_url, instructions')
       .eq('product_id', productId)
@@ -84,9 +98,10 @@ export async function GET(
     }
 
     // Generate download token (valid for 24 hours, max 3 downloads)
-    const { data: token, error: tokenError } = await supabase
+    const { data: token, error: tokenError } = await admin
       .from('download_tokens')
       .insert({
+        token: randomBytes(32).toString('hex'),
         user_id: user.id,
         product_id: productId,
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -112,7 +127,7 @@ export async function GET(
   } catch (error) {
     console.error('Error generating download:', error);
     return NextResponse.json(
-      { error: 'Failed to generate download' },
+      { error: getDownloadSetupError(error) },
       { status: 500 }
     );
   }
@@ -134,14 +149,15 @@ export async function POST(
       );
     }
 
-    const supabase = await createServerSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const authClient = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const admin = createAdminClient();
 
     // Verify token
-    const { data: tokenData, error: tokenError } = await supabase
+    const { data: tokenData, error: tokenError } = await admin
       .from('download_tokens')
       .select('user_id, product_id, expires_at, download_count, max_downloads')
       .eq('token', token)
@@ -173,7 +189,7 @@ export async function POST(
     }
 
     // Get bot download URL
-    const { data: product, error: productError } = await supabase
+    const { data: product, error: productError } = await admin
       .from('products')
       .select('id, product_type, metadata')
       .eq('id', params.productId)
@@ -183,7 +199,7 @@ export async function POST(
       return NextResponse.json({ error: 'This bot is not available for download.' }, { status: 409 });
     }
 
-    const { data: accessData, error: accessError } = await supabase
+    const { data: accessData, error: accessError } = await admin
       .from('user_access')
       .select('expires_at')
       .eq('user_id', user.id)
@@ -198,7 +214,7 @@ export async function POST(
       return NextResponse.json({ error: 'Your access to this content has expired.' }, { status: 403 });
     }
 
-    const { data: bot, error: botError } = await supabase
+    const { data: bot, error: botError } = await admin
       .from('bot_links')
       .select('download_url')
       .eq('product_id', params.productId)
@@ -214,7 +230,7 @@ export async function POST(
     }
 
     // Increment download count
-    const { data: updatedToken, error: updateError } = await supabase
+    const { data: updatedToken, error: updateError } = await admin
       .from('download_tokens')
       .update({
         download_count: tokenData.download_count + 1,
@@ -233,7 +249,7 @@ export async function POST(
     }
 
     // Log download event
-    const { error: analyticsError } = await supabase
+    const { error: analyticsError } = await admin
       .from('analytics_events')
       .insert({
         user_id: tokenData.user_id,
@@ -255,7 +271,7 @@ export async function POST(
   } catch (error) {
     console.error('Error processing download:', error);
     return NextResponse.json(
-      { error: 'Failed to process download' },
+      { error: getDownloadSetupError(error) },
       { status: 500 }
     );
   }

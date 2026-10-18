@@ -140,6 +140,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
       // Get download token from API
       const response = await fetch(`/api/downloads/${params.id}`);
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to prepare the bot download.");
 
       if (data.success) {
         setDownloadToken(data.token);
@@ -151,14 +152,13 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
         });
 
         const downloadData = await downloadResponse.json();
-        if (downloadData.success && downloadData.downloadUrl) {
-          // Open download in new tab
-          window.open(downloadData.downloadUrl, "_blank");
-        }
+        if (!downloadResponse.ok) throw new Error(downloadData.error || "Unable to start the bot download.");
+        if (!downloadData.success || !downloadData.downloadUrl) throw new Error("The bot download link is not configured.");
+        window.open(downloadData.downloadUrl, "_blank", "noopener,noreferrer");
       }
     } catch (error) {
       console.error("Error downloading bot:", error);
-      alert("Failed to download bot. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to download bot. Please try again.");
     } finally {
       setIsDownloading(false);
     }
