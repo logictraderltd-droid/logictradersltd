@@ -36,9 +36,13 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [readActivityKeys, setReadActivityKeys] = useState<Set<string>>(new Set());
+    const [readStateLoaded, setReadStateLoaded] = useState(false);
     const isFetchingRef = useRef(false);
 
-    const activityKey = (activity: AdminActivity) => `${activity.id}:${activity.createdAt}`;
+    const activityKey = (activity: AdminActivity) => activity.id;
+    const activityWasRead = (activity: AdminActivity) =>
+        readActivityKeys.has(activity.id) ||
+        Array.from(readActivityKeys).some((key) => key.startsWith(`${activity.id}:`));
 
     const loadActivities = useCallback(async () => {
         if (isFetchingRef.current) return;
@@ -143,6 +147,8 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
             }
         } catch (error) {
             console.error("Unable to read notification view state:", error);
+        } finally {
+            setReadStateLoaded(true);
         }
 
         void loadActivities();
@@ -162,9 +168,9 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
         };
     }, [loadActivities]);
 
-    const visibleActivities = activities.filter((activity) =>
-        !readActivityKeys.has(activityKey(activity))
-    );
+    const visibleActivities = readStateLoaded
+        ? activities.filter((activity) => !activityWasRead(activity))
+        : [];
     const unreadCount = visibleActivities.length;
 
     const toggleNotifications = () => {
