@@ -32,6 +32,33 @@ function validOptionalUrl(value: string) {
   }
 }
 
+async function savePlatformContent(
+  method: "PUT" | "DELETE",
+  body?: Record<string, unknown>,
+  query?: URLSearchParams,
+) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(`/api/admin/platform-content${query ? `?${query.toString()}` : ""}`, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Platform content save failed.");
+    return result;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Saving took too long. Your changes are still here; try saving again.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export function PlatformContentTab() {
   const [sectionKey, setSectionKey] = useState<string>(contentSections[0].key);
   const [items, setItems] = useState<PlatformListing[]>([]);
@@ -115,21 +142,12 @@ export function PlatformContentTab() {
     setSavingId(item.id);
     setNotice("");
     try {
-      const { data, error } = await createBrowserClient()
-        .from("platform_listings")
-        .upsert(
-          {
-            ...item,
-            section_key: sectionKey,
-            title: item.title.trim(),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "section_key,id" },
-        )
-        .select("id,section_key")
-        .single();
-      if (error) throw error;
-      if (data?.id !== item.id || data.section_key !== sectionKey) {
+      const result = await savePlatformContent("PUT", {
+        action: "save_listing",
+        sectionKey,
+        item,
+      });
+      if (result.listing?.id !== item.id || result.listing.section_key !== sectionKey) {
         throw new Error("Supabase did not confirm the listing save.");
       }
       setSavedIds((current) => new Set(current).add(item.id));
@@ -165,13 +183,8 @@ export function PlatformContentTab() {
     setSavingId(item.id);
     setNotice("");
     try {
-      const { error } = await createBrowserClient()
-        .from("platform_listings")
-        .delete()
-        .eq("section_key", sectionKey)
-        .eq("id", item.id)
-        .select("id");
-      if (error) throw error;
+      const query = new URLSearchParams({ sectionKey, id: item.id });
+      await savePlatformContent("DELETE", undefined, query);
       setItems((current) => current.filter((entry) => entry.id !== item.id));
       setSavedIds((current) => {
         const next = new Set(current);
@@ -201,23 +214,15 @@ export function PlatformContentTab() {
     setIsSavingLinks(true);
     setNotice("");
     try {
-      const supabase = createBrowserClient();
-      const [{ error: publicError }, { error: privateError }] = await Promise.all([
-        supabase.from("site_content").upsert(
-          { key: "signal_community_settings", value: { community_url: communityUrl.trim() }, updated_at: new Date().toISOString() },
-          { onConflict: "key" },
-        ),
-        supabase.from("platform_private_settings").upsert(
-          { key: "signal_vip_telegram", value: { url: vipUrl.trim() }, updated_at: new Date().toISOString() },
-          { onConflict: "key" },
-        ),
-      ]);
-      if (publicError) throw publicError;
-      if (privateError) throw privateError;
+      await savePlatformContent("PUT", {
+        action: "save_signal_links",
+        communityUrl,
+        vipUrl,
+      });
       setNotice("Signal community links saved.");
     } catch (error) {
       console.error("Unable to save signal links:", error);
-      setNotice("Could not save signal links. Check the Supabase admin policy.");
+      setNotice(error instanceof Error ? error.message : "Could not save signal links.");
     } finally {
       setIsSavingLinks(false);
     }
