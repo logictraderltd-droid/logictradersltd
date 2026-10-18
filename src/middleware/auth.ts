@@ -29,6 +29,7 @@ const PUBLIC_ROUTES = [
   '/courses',
   '/signals',
   '/bots',
+  '/pro-firm',
   '/pricing',
   '/about',
   '/contact',
