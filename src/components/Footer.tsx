@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { TrendingUp, Mail, Phone, MapPin, Twitter, Youtube, MessageCircle } from "lucide-react";
+import { getSupportGmailUrl } from "@/lib/support";
 
 const footerLinks = {
   products: [
@@ -76,7 +77,14 @@ export default function Footer() {
             <div className="space-y-3">
               <div className="flex items-center space-x-3 text-sm text-gray-400">
                 <Mail className="w-4 h-4 text-gold-400" />
-               <a href={`mailto:${supportEmail}`} className="hover:text-white">{supportEmail}</a>
+               <a
+                 href={getSupportGmailUrl("Website support", "Hello Logic Traders support,\n\nI need help.\n\n", supportEmail)}
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 className="hover:text-white"
+               >
+                 {supportEmail}
+               </a>
               </div>
               <div className="flex items-center space-x-3 text-sm text-gray-400">
                 <Phone className="w-4 h-4 text-gold-400" />

@@ -7,6 +7,7 @@ import { createBrowserClient } from "@/lib/supabase";
 import { Course, CourseLesson } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { getYouTubeEmbedUrl } from "@/lib/video";
+import { getSupportGmailUrl } from "@/lib/support";
 
 export default function CourseViewerPage() {
     const params = useParams();
@@ -434,10 +435,18 @@ export default function CourseViewerPage() {
                         <div className="p-6 rounded-3xl bg-gradient-to-br from-blue-900/10 to-indigo-900/10 border border-blue-500/10 shadow-xl overflow-hidden relative">
                             <div className="absolute top-0 right-0 -m-4 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl" />
                             <h3 className="font-bold text-white mb-2 flex items-center gap-2 font-display">Need Technical Support?</h3>
-                            <p className="text-sm text-gray-400 mb-4 leading-relaxed">Stuck on a concept? Join our Discord and talk directly with instructors.</p>
-                            <button className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 hover:text-white font-bold transition-all text-sm uppercase tracking-wider">
+                            <p className="text-sm text-gray-400 mb-4 leading-relaxed">Stuck on a concept? Email our instructors directly for help.</p>
+                            <a
+                                href={getSupportGmailUrl(
+                                    `Course support${course?.name ? `: ${course.name}` : ""}`,
+                                    `Hello Logic Traders support,\n\nI need help with${course?.name ? ` the course "${course.name}"` : " a course"}.\n\n`,
+                                )}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block w-full py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-center text-gray-300 hover:text-white font-bold transition-all text-sm uppercase tracking-wider"
+                            >
                                 Contact Support
-                            </button>
+                            </a>
                         </div>
                     </div>
                 </div>

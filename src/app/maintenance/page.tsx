@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Wrench } from "lucide-react";
+import { getSupportGmailUrl } from "@/lib/support";
 
 export default function MaintenancePage() {
   return (
@@ -13,7 +14,7 @@ export default function MaintenancePage() {
           Logic Traders Ltd is temporarily undergoing maintenance. Please check back shortly.
         </p>
         <p className="mt-5 text-sm text-gray-500">
-          Need help? <a className="text-gold-400 hover:text-gold-300" href="mailto:logictradersltd@gmail.com">Contact support</a>
+          Need help? <a className="text-gold-400 hover:text-gold-300" href={getSupportGmailUrl("Website support", "Hello Logic Traders support,\n\nI need help with the website.\n\n")} target="_blank" rel="noopener noreferrer">Contact support</a>
         </p>
         <Link href="/login" className="mt-7 inline-block text-sm text-gray-400 hover:text-white">
           Administrator sign in

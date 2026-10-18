@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { createBrowserClient } from "@/lib/supabase";
+import { getSupportGmailUrl } from "@/lib/support";
 
 interface BotLink {
   link_url: string;
@@ -467,7 +468,10 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                 <div className="border-t border-dark-800 pt-6">
                   <h4 className="font-bold mb-3">Need Help?</h4>
                   <a
-                    href={`https://mail.google.com/mail/?view=cm&fs=1&to=logictraderltd@gmail.com&su=${encodeURIComponent(`Support for ${product?.name || "trading bot"}`)}&body=${encodeURIComponent(`Hello Logic Traders support,\n\nI need help with ${product?.name || "this trading bot"}.\n\n`)}`}
+                    href={getSupportGmailUrl(
+                      `Support for ${product?.name || "trading bot"}`,
+                      `Hello Logic Traders support,\n\nI need help with ${product?.name || "this trading bot"}.\n\n`,
+                    )}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-gray-400 hover:text-gold-400 transition-colors"
