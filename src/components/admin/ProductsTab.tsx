@@ -454,10 +454,22 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                     message: "This product has order or payment history, so it was deactivated instead. Its records were preserved.",
                 });
             } else {
-                const { error } = await supabase
+                if (getProductType(productToDelete) === "bot") {
+                    const { error: botLinksError } = await supabase
+                        .from("bot_links")
+                        .delete()
+                        .eq("product_id", productToDelete.id);
+                    if (botLinksError && !isMissingRelation(botLinksError, "bot_links")) {
+                        throw botLinksError;
+                    }
+                }
+
+                const { data: deletedProduct, error } = await supabase
                     .from("products")
                     .delete()
-                    .eq("id", productToDelete.id);
+                    .eq("id", productToDelete.id)
+                    .select("id")
+                    .maybeSingle();
                 if (error?.code === "23503") {
                     const { error: deactivateError } = await supabase
                         .from("products")
@@ -470,6 +482,8 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                     });
                 } else if (error) {
                     throw error;
+                } else if (!deletedProduct) {
+                    throw new Error("The product was not deleted. Check that your admin account has permission to delete products.");
                 } else {
                     setNotification({ type: "success", message: "Product deleted successfully." });
                 }
