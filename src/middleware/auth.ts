@@ -30,7 +30,6 @@ const PUBLIC_ROUTES = [
   '/signals',
   '/bots',
   '/pro-firm',
-  '/pricing',
   '/about',
   '/contact',
   '/api/auth',
