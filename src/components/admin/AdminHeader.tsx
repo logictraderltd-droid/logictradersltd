@@ -38,6 +38,8 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
     const [readActivityKeys, setReadActivityKeys] = useState<Set<string>>(new Set());
     const [readStateLoaded, setReadStateLoaded] = useState(false);
     const isFetchingRef = useRef(false);
+    const legacyReadActivityKeysRef = useRef<string[]>([]);
+    const migratedLegacyActivityIdsRef = useRef(new Set<string>());
 
     const activityKey = (activity: AdminActivity) => activity.id;
     const activityWasRead = (activity: AdminActivity) =>
@@ -137,19 +139,36 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
     }, []);
 
     useEffect(() => {
-        try {
-            const storedReadActivities = window.localStorage.getItem(READ_ACTIVITIES_KEY);
-            if (storedReadActivities) {
-                const parsed: unknown = JSON.parse(storedReadActivities);
-                if (Array.isArray(parsed) && parsed.every((value) => typeof value === "string")) {
-                    setReadActivityKeys(new Set(parsed));
+        let cancelled = false;
+        const loadReadState = async () => {
+            try {
+                const storedReadActivities = window.localStorage.getItem(READ_ACTIVITIES_KEY);
+                if (storedReadActivities) {
+                    const parsed: unknown = JSON.parse(storedReadActivities);
+                    if (Array.isArray(parsed) && parsed.every((value) => typeof value === "string")) {
+                        legacyReadActivityKeysRef.current = parsed;
+                    }
                 }
+
+                const response = await fetch("/api/admin/notifications/read", { cache: "no-store" });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "Unable to load saved notification state.");
+                if (cancelled) return;
+
+                const savedKeys = Array.isArray(result.activityKeys)
+                    ? result.activityKeys.filter((key: unknown): key is string => typeof key === "string")
+                    : [];
+                setReadActivityKeys(new Set(savedKeys));
+            } catch (error) {
+                console.error("Unable to load saved notification state:", error);
+                if (!cancelled) {
+                    setLoadError(error instanceof Error ? error.message : "Unable to load saved notification state.");
+                }
+            } finally {
+                if (!cancelled) setReadStateLoaded(true);
             }
-        } catch (error) {
-            console.error("Unable to read notification view state:", error);
-        } finally {
-            setReadStateLoaded(true);
-        }
+        };
+        void loadReadState();
 
         void loadActivities();
         const refreshTimer = window.setInterval(() => {
@@ -162,11 +181,40 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
         window.addEventListener("focus", refreshOnFocus);
         window.addEventListener("platform-settings-updated", refreshSettings);
         return () => {
+            cancelled = true;
             window.clearInterval(refreshTimer);
             window.removeEventListener("focus", refreshOnFocus);
             window.removeEventListener("platform-settings-updated", refreshSettings);
         };
     }, [loadActivities]);
+
+    useEffect(() => {
+        if (!readStateLoaded || activities.length === 0) return;
+        const legacyActivities = activities.filter((activity) =>
+            legacyReadActivityKeysRef.current.some((key) => key.startsWith(`${activity.id}:`)) &&
+            !migratedLegacyActivityIdsRef.current.has(activity.id) &&
+            !readActivityKeys.has(activity.id)
+        );
+        if (legacyActivities.length === 0) return;
+
+        const activityKeys = legacyActivities.map(activityKey);
+        migratedLegacyActivityIdsRef.current = new Set([
+            ...Array.from(migratedLegacyActivityIdsRef.current),
+            ...activityKeys,
+        ]);
+        void fetch("/api/admin/notifications/read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activityKeys }),
+        }).then(async (response) => {
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "Unable to migrate saved notification state.");
+            setReadActivityKeys((current) => new Set([...Array.from(current), ...activityKeys]));
+        }).catch((error) => {
+            console.error("Unable to migrate saved notification state:", error);
+            setLoadError(error instanceof Error ? error.message : "Unable to migrate saved notification state.");
+        });
+    }, [activities, readActivityKeys, readStateLoaded]);
 
     const visibleActivities = readStateLoaded
         ? activities.filter((activity) => !activityWasRead(activity))
@@ -177,27 +225,45 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
         setIsOpen((open) => !open);
     };
 
-    const openActivity = (activity: AdminActivity) => {
-        const nextReadKeys = new Set(readActivityKeys);
-        nextReadKeys.add(activityKey(activity));
-        setReadActivityKeys(nextReadKeys);
+    const markActivitiesSeen = async (activityKeys: string[]) => {
+        const response = await fetch("/api/admin/notifications/read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activityKeys }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Unable to save notification read state.");
+        setReadActivityKeys((current) => new Set([...Array.from(current), ...activityKeys]));
         try {
-            window.localStorage.setItem(READ_ACTIVITIES_KEY, JSON.stringify(Array.from(nextReadKeys)));
+            window.localStorage.setItem(
+                READ_ACTIVITIES_KEY,
+                JSON.stringify(Array.from(new Set([...Array.from(readActivityKeys), ...activityKeys]))),
+            );
+        } catch (error) {
+            console.error("Unable to update local notification read state:", error);
+        }
+    };
+
+    const openActivity = async (activity: AdminActivity) => {
+        try {
+            await markActivitiesSeen([activityKey(activity)]);
         } catch (error) {
             console.error("Unable to persist seen notification:", error);
+            setLoadError(error instanceof Error ? error.message : "Unable to save notification read state.");
+            return;
         }
         setIsOpen(false);
         onNavigate(activity.tab);
     };
 
-    const markAllActivitiesSeen = () => {
-        const nextReadKeys = new Set(readActivityKeys);
-        activities.forEach((activity) => nextReadKeys.add(activityKey(activity)));
-        setReadActivityKeys(nextReadKeys);
+    const markAllActivitiesSeen = async () => {
+        const activityKeys = activities.map(activityKey);
+        if (activityKeys.length === 0) return;
         try {
-            window.localStorage.setItem(READ_ACTIVITIES_KEY, JSON.stringify(Array.from(nextReadKeys)));
+            await markActivitiesSeen(activityKeys);
         } catch (error) {
             console.error("Unable to persist seen notifications:", error);
+            setLoadError(error instanceof Error ? error.message : "Unable to save notification read state.");
         }
     };
 
