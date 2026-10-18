@@ -426,68 +426,12 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
     const handleDeleteConfirm = async () => {
         if (!productToDelete) return;
         setIsLoading(true);
-        const supabase = createBrowserClient();
 
         try {
-            console.log("Checking product history before deletion:", productToDelete.id);
-            const [ordersResult, manualPaymentsResult] = await Promise.all([
-                supabase
-                    .from("orders")
-                    .select("id", { count: "exact", head: true })
-                    .eq("product_id", productToDelete.id),
-                supabase
-                    .from("manual_payment_requests")
-                    .select("id", { count: "exact", head: true })
-                    .eq("product_id", productToDelete.id),
-            ]);
-            if (ordersResult.error) throw ordersResult.error;
-            if (manualPaymentsResult.error) throw manualPaymentsResult.error;
-
-            if ((ordersResult.count || 0) > 0 || (manualPaymentsResult.count || 0) > 0) {
-                const { error } = await supabase
-                    .from("products")
-                    .update({ is_active: false })
-                    .eq("id", productToDelete.id);
-                if (error) throw error;
-                setNotification({
-                    type: "success",
-                    message: "This product has order or payment history, so it was deactivated instead. Its records were preserved.",
-                });
-            } else {
-                if (getProductType(productToDelete) === "bot") {
-                    const { error: botLinksError } = await supabase
-                        .from("bot_links")
-                        .delete()
-                        .eq("product_id", productToDelete.id);
-                    if (botLinksError && !isMissingRelation(botLinksError, "bot_links")) {
-                        throw botLinksError;
-                    }
-                }
-
-                const { data: deletedProduct, error } = await supabase
-                    .from("products")
-                    .delete()
-                    .eq("id", productToDelete.id)
-                    .select("id")
-                    .maybeSingle();
-                if (error?.code === "23503") {
-                    const { error: deactivateError } = await supabase
-                        .from("products")
-                        .update({ is_active: false })
-                        .eq("id", productToDelete.id);
-                    if (deactivateError) throw deactivateError;
-                    setNotification({
-                        type: "success",
-                        message: "This product has related records, so it was deactivated instead. Its records were preserved.",
-                    });
-                } else if (error) {
-                    throw error;
-                } else if (!deletedProduct) {
-                    throw new Error("The product was not deleted. Check that your admin account has permission to delete products.");
-                } else {
-                    setNotification({ type: "success", message: "Product deleted successfully." });
-                }
-            }
+            const response = await fetch(`/api/admin/products/${productToDelete.id}`, { method: "DELETE" });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "Failed to delete product.");
+            setNotification({ type: "success", message: "Product and its related order, payment, and access history were permanently deleted." });
             setIsDeleteModalOpen(false);
             onRefresh();
         } catch (error: any) {
@@ -1323,7 +1267,7 @@ export function ProductsTab({ products, onRefresh }: ProductsTabProps) {
                             <div>
                                 <h3 className="text-xl font-bold text-white">Delete Product?</h3>
                                 <p className="text-gray-400 mt-2 text-sm">
-                                    Delete <span className="text-white font-bold">"{productToDelete.name}"</span> if it has no order or payment history. Products with existing history will be deactivated instead so their records are preserved.
+                                    Permanently delete <span className="text-white font-bold">"{productToDelete.name}"</span> and all related orders, payments, delivery records, and customer access? This cannot be undone.
                                 </p>
                             </div>
                             <div className="flex gap-3 pt-4">
