@@ -184,6 +184,17 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
         onNavigate(activity.tab);
     };
 
+    const markAllActivitiesSeen = () => {
+        const nextReadKeys = new Set(readActivityKeys);
+        activities.forEach((activity) => nextReadKeys.add(activityKey(activity)));
+        setReadActivityKeys(nextReadKeys);
+        try {
+            window.localStorage.setItem(READ_ACTIVITIES_KEY, JSON.stringify(Array.from(nextReadKeys)));
+        } catch (error) {
+            console.error("Unable to persist seen notifications:", error);
+        }
+    };
+
     return (
         <header className="sticky top-0 z-30 flex items-center justify-between p-4 md:px-8 md:py-5 bg-dark-950/80 backdrop-blur-md border-b border-dark-800">
             <div className="flex items-center gap-4">
@@ -245,8 +256,8 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
                                 ))}
                             </div>
                             <div className="border-t border-dark-800 px-4 py-2 text-right">
-                                <button type="button" onClick={() => void loadActivities()} disabled={isLoading} className="text-xs text-gold-400 hover:text-gold-300 disabled:opacity-50">
-                                    {isLoading ? "Refreshing..." : "Refresh"}
+                                <button type="button" onClick={markAllActivitiesSeen} disabled={isLoading || visibleActivities.length === 0} className="text-xs text-gold-400 hover:text-gold-300 disabled:opacity-50">
+                                    Mark all as seen
                                 </button>
                             </div>
                         </section>
