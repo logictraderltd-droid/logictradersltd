@@ -467,7 +467,9 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
                 <div className="border-t border-dark-800 pt-6">
                   <h4 className="font-bold mb-3">Need Help?</h4>
                   <a
-                    href={`mailto:logictraderltd@gmail.com?subject=${encodeURIComponent(`Support for ${product?.name || "trading bot"}`)}&body=${encodeURIComponent(`Hello Logic Traders support,\n\nI need help with ${product?.name || "this trading bot"}.\n\n`)}`}
+                    href={`https://mail.google.com/mail/?view=cm&fs=1&to=logictraderltd@gmail.com&su=${encodeURIComponent(`Support for ${product?.name || "trading bot"}`)}&body=${encodeURIComponent(`Hello Logic Traders support,\n\nI need help with ${product?.name || "this trading bot"}.\n\n`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="flex items-center text-gray-400 hover:text-gold-400 transition-colors"
                   >
                     <FileText className="w-5 h-5 mr-2" />
