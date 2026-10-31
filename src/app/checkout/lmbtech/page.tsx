@@ -164,7 +164,7 @@ function LmbtechCheckoutContent() {
       }
     };
     void checkStatus();
-    const interval = window.setInterval(() => { void checkStatus(); }, 20000);
+    const interval = window.setInterval(() => { void checkStatus(); }, 10000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);

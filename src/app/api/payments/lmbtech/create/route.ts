@@ -111,7 +111,7 @@ export async function POST(request: Request) {
     stage = "checking pending payment";
     const { data: existingRequest, error: existingError } = await admin
       .from("lmbtech_payment_requests")
-      .select("reference_id, order_id, payment_method, amount_rwf, status, redirect_url")
+      .select("reference_id, payment_method, amount_rwf, status, redirect_url")
       .eq("user_id", user.id)
       .eq("product_id", product.id)
       .eq("status", "pending")
