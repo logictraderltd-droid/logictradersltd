@@ -60,7 +60,6 @@ export async function PUT(request: Request) {
         typeof settings.mobileMoneyEnabled !== "boolean" ||
         typeof settings.binanceEnabled !== "boolean" ||
         typeof settings.lmbtechMobileMoneyEnabled !== "boolean" ||
-        typeof settings.lmbtechCardEnabled !== "boolean" ||
         typeof settings.adminNotificationsEnabled !== "boolean") {
       return NextResponse.json({ error: "Enter a valid platform name, support email, and setting values." }, { status: 400 });
     }

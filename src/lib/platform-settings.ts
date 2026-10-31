@@ -10,7 +10,6 @@ export interface PlatformSettings {
   mobileMoneyEnabled: boolean;
   binanceEnabled: boolean;
   lmbtechMobileMoneyEnabled: boolean;
-  lmbtechCardEnabled: boolean;
   adminNotificationsEnabled: boolean;
 }
 
@@ -22,7 +21,6 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   mobileMoneyEnabled: true,
   binanceEnabled: true,
   lmbtechMobileMoneyEnabled: true,
-  lmbtechCardEnabled: true,
   adminNotificationsEnabled: true,
 };
 

@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS public.lmbtech_payment_requests (
   order_id UUID NOT NULL UNIQUE REFERENCES public.orders(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES public.products(id),
-  payment_method TEXT NOT NULL CHECK (payment_method IN ('MTN_MOMO_RWA', 'card')),
+  payment_method TEXT NOT NULL CHECK (payment_method = 'MTN_MOMO_RWA'),
   amount_rwf INTEGER NOT NULL CHECK (amount_rwf > 0),
   original_amount_cents INTEGER NOT NULL CHECK (original_amount_cents > 0),
   exchange_rate NUMERIC(24, 12) NOT NULL CHECK (exchange_rate > 0),

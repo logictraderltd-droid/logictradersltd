@@ -1,6 +1,6 @@
 export const LMBTECH_API_URL = "https://pay.lmbtech.rw/pay/config/api.php";
 
-export type LmbtechPaymentMethod = "MTN_MOMO_RWA" | "card";
+export type LmbtechPaymentMethod = "MTN_MOMO_RWA";
 export type LmbtechTransactionStatus = "pending" | "success" | "failed" | "cancelled";
 
 export interface LmbtechApiResponse {
@@ -59,8 +59,7 @@ export async function initiateLmbtechCollection(input: {
   referenceId: string;
   callbackUrl: string;
   paymentMethod: LmbtechPaymentMethod;
-  payerPhone?: string;
-  cardRedirectUrl?: string;
+  payerPhone: string;
 }) {
   const payload: Record<string, string | number> = {
     email: input.email,
@@ -72,13 +71,10 @@ export async function initiateLmbtechCollection(input: {
     action: "pay",
     payment_method: input.paymentMethod,
   };
-  if (input.paymentMethod === "MTN_MOMO_RWA") {
-    if (!input.payerPhone) throw new Error("A payer phone number is required for MTN Mobile Money.");
-    payload.payer_phone = input.payerPhone;
-  } else {
-    if (!input.cardRedirectUrl) throw new Error("A card return URL is required for card payments.");
-    payload.card_redirect_url = input.cardRedirectUrl;
+  if (!/^\+2507\d{8}$/.test(input.payerPhone)) {
+    throw new Error("A Rwanda Mobile Money number is required in +2507XXXXXXXX format.");
   }
+  payload.payer_phone = input.payerPhone;
 
   const response = await requestLmbtech(new URL(LMBTECH_API_URL), {
     method: "POST",
@@ -150,26 +146,4 @@ export function getLmbtechCallbackUrl() {
     throw new Error("The LMBTech callback URL must use HTTPS.");
   }
   return new URL("/api/webhooks/lmbtech", appUrl).toString();
-}
-
-export function getLmbtechCardRedirectUrl(productId: string, referenceId: string) {
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (!configuredUrl) throw new Error("NEXT_PUBLIC_APP_URL is required for LMBTech card returns.");
-  const url = new URL("/checkout", configuredUrl);
-  url.searchParams.set("product", productId);
-  url.searchParams.set("lmbtech_reference", referenceId);
-  return url.toString();
-}
-
-export function getLmbtechRedirectUrl(response: LmbtechApiResponse) {
-  const data = getRecord(response.data);
-  const redirectUrl = data?.redirect_url ?? response.redirect_url;
-  if (typeof redirectUrl !== "string") return null;
-  try {
-    const parsedUrl = new URL(redirectUrl);
-    if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "pay.lmbtech.rw") return null;
-    return parsedUrl.toString();
-  } catch {
-    return null;
-  }
 }

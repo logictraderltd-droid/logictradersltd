@@ -5,10 +5,7 @@ import { getPlatformSettings } from "@/lib/platform-settings";
 import { verifyManualPaymentQuote, type ManualPaymentQuote } from "@/lib/manual-payments";
 import {
   getLmbtechCallbackUrl,
-  getLmbtechCardRedirectUrl,
-  getLmbtechRedirectUrl,
   initiateLmbtechCollection,
-  type LmbtechPaymentMethod,
 } from "@/lib/lmbtech";
 import { NextResponse } from "next/server";
 
@@ -55,8 +52,8 @@ export async function POST(request: Request) {
     const paymentMethod = body.paymentMethod;
     const fullName = cleanString(body.fullName || user.user_metadata?.full_name);
     const payerPhone = cleanString(body.payerPhone).replace(/[\s()-]/g, "");
-    if (!productId || !quoteToken || (paymentMethod !== "MTN_MOMO_RWA" && paymentMethod !== "card")) {
-      return NextResponse.json({ error: "Choose a supported LMBTech payment method." }, { status: 400 });
+    if (!productId || !quoteToken || paymentMethod !== "MTN_MOMO_RWA") {
+      return NextResponse.json({ error: "LMBTech checkout currently supports Mobile Money only." }, { status: 400 });
     }
     if (fullName.length < 2 || fullName.length > 150) {
       return NextResponse.json({ error: "Enter your full name." }, { status: 400 });
@@ -65,8 +62,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Enter a Rwanda mobile number in +2507XXXXXXXX format." }, { status: 400 });
     }
     const settings = await getPlatformSettings();
-    if ((paymentMethod === "MTN_MOMO_RWA" && !settings.lmbtechMobileMoneyEnabled) ||
-        (paymentMethod === "card" && !settings.lmbtechCardEnabled)) {
+    if (!settings.lmbtechMobileMoneyEnabled) {
       return NextResponse.json({ error: "This payment method is currently unavailable. Choose another method." }, { status: 403 });
     }
 
@@ -207,29 +203,17 @@ export async function POST(request: Request) {
 
     stage = "initiating LMBTech payment";
     const callbackUrl = getLmbtechCallbackUrl();
-    const cardRedirectUrl = paymentMethod === "card"
-      ? getLmbtechCardRedirectUrl(product.id, referenceId)
-      : undefined;
     gatewayAttempted = true;
-    const gatewayResponse = await initiateLmbtechCollection({
+    await initiateLmbtechCollection({
       email: user.email,
       name: fullName,
       amount: amountRwf,
       servicePaid: `Order ${order.id}`,
       referenceId,
       callbackUrl,
-      paymentMethod: paymentMethod as LmbtechPaymentMethod,
-      ...(paymentMethod === "MTN_MOMO_RWA" ? { payerPhone } : {}),
-      ...(cardRedirectUrl ? { cardRedirectUrl } : {}),
+      paymentMethod: "MTN_MOMO_RWA",
+      payerPhone,
     });
-    const redirectUrl = paymentMethod === "card" ? getLmbtechRedirectUrl(gatewayResponse) : null;
-    if (redirectUrl) {
-      const { error: redirectError } = await admin
-        .from("lmbtech_payment_requests")
-        .update({ redirect_url: redirectUrl })
-        .eq("id", payment.id);
-      if (redirectError) throw redirectError;
-    }
 
     return NextResponse.json({
       request: {
@@ -237,7 +221,7 @@ export async function POST(request: Request) {
         payment_method: paymentMethod,
         amount_rwf: amountRwf,
         status: "pending",
-        redirect_url: redirectUrl,
+        redirect_url: null,
       },
       reused: false,
     });

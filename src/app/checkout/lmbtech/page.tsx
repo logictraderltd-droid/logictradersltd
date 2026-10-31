@@ -3,14 +3,14 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Check, CreditCard, Smartphone } from "lucide-react";
+import { ArrowLeft, Check, Smartphone } from "lucide-react";
 import { createBrowserClient, normalizeProductRow } from "@/lib/supabase";
 import { Product } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
-type PaymentMethod = "MTN_MOMO_RWA" | "card";
+type PaymentMethod = "MTN_MOMO_RWA";
 type PaymentStatus = "pending" | "success" | "failed" | "cancelled";
 
 interface Quote {
@@ -24,7 +24,7 @@ interface Quote {
 
 interface PaymentRequest {
   reference_id: string;
-  payment_method: PaymentMethod;
+  payment_method: PaymentMethod | "card";
   amount_rwf: number;
   status: PaymentStatus;
   redirect_url: string | null;
@@ -38,8 +38,7 @@ function LmbtechCheckoutContent() {
   const { isAuthenticated, user } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(true);
-  const [method, setMethod] = useState<PaymentMethod>("MTN_MOMO_RWA");
-  const [availableMethods, setAvailableMethods] = useState({ MTN_MOMO_RWA: false, card: false });
+  const [availableMethod, setAvailableMethod] = useState(false);
   const [loadingMethods, setLoadingMethods] = useState(true);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteVersion, setQuoteVersion] = useState(0);
@@ -66,10 +65,7 @@ function LmbtechCheckoutContent() {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Unable to load payment methods.");
         if (!cancelled) {
-          setAvailableMethods({
-            MTN_MOMO_RWA: result.settings?.lmbtechMobileMoneyEnabled === true,
-            card: result.settings?.lmbtechCardEnabled === true,
-          });
+          setAvailableMethod(result.settings?.lmbtechMobileMoneyEnabled === true);
         }
       } catch (settingsError) {
         if (!cancelled) setQuoteError(settingsError instanceof Error ? settingsError.message : "Unable to load payment methods.");
@@ -80,12 +76,6 @@ function LmbtechCheckoutContent() {
     void loadMethods();
     return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => {
-    if (availableMethods[method]) return;
-    if (availableMethods.MTN_MOMO_RWA) setMethod("MTN_MOMO_RWA");
-    else if (availableMethods.card) setMethod("card");
-  }, [availableMethods, method]);
 
   useEffect(() => {
     if (!productId) {
@@ -198,7 +188,7 @@ function LmbtechCheckoutContent() {
       setError("Enter your full name.");
       return;
     }
-    if (method === "MTN_MOMO_RWA" && !/^\+2507\d{8}$/.test(payerPhone.replace(/[\s()-]/g, ""))) {
+    if (!/^\+2507\d{8}$/.test(payerPhone.replace(/[\s()-]/g, ""))) {
       setError("Enter a Rwanda mobile number in +2507XXXXXXXX format.");
       return;
     }
@@ -217,7 +207,7 @@ function LmbtechCheckoutContent() {
         body: JSON.stringify({
           productId: product.id,
           quoteToken: quote.token,
-          paymentMethod: method,
+          paymentMethod: "MTN_MOMO_RWA",
           fullName,
           payerPhone,
           deliveryEmail,
@@ -234,11 +224,6 @@ function LmbtechCheckoutContent() {
       }
       const request = result.request as PaymentRequest;
       setPaymentRequest(request);
-      if (request.payment_method === "card" && request.redirect_url) {
-        window.location.assign(request.redirect_url);
-      } else if (request.payment_method === "card") {
-        setError("Card checkout was initiated but no redirect URL was returned. Check the payment status before retrying.");
-      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to start your payment.");
     } finally {
@@ -293,24 +278,19 @@ function LmbtechCheckoutContent() {
               ) : (
                 <>
                   <h2 className="text-lg font-bold text-white">Payment method</h2>
-                  {!loadingMethods && (availableMethods.MTN_MOMO_RWA || availableMethods.card) ? (
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      {availableMethods.MTN_MOMO_RWA && <button type="button" onClick={() => setMethod("MTN_MOMO_RWA")} className={`flex items-center justify-center gap-2 border p-3 text-sm ${method === "MTN_MOMO_RWA" ? "border-gold-500 bg-gold-500/10 text-white" : "border-dark-700 text-gray-400"}`}>
-                        <Smartphone className="h-4 w-4" /> Mobile Money
-                      </button>}
-                      {availableMethods.card && <button type="button" onClick={() => setMethod("card")} className={`flex items-center justify-center gap-2 border p-3 text-sm ${method === "card" ? "border-gold-500 bg-gold-500/10 text-white" : "border-dark-700 text-gray-400"}`}>
-                        <CreditCard className="h-4 w-4" /> Card
-                      </button>}
+                  {!loadingMethods && availableMethod ? (
+                    <div className="mt-4 flex items-center gap-2 border border-gold-500/40 bg-gold-500/10 p-3 text-sm text-white">
+                      <Smartphone className="h-4 w-4" /> MTN Mobile Money
                     </div>
-                  ) : <p className="mt-4 text-sm text-gray-400">{loadingMethods ? "Loading payment methods..." : "No LMBTech payment methods are currently available."}</p>}
+                  ) : <p className="mt-4 text-sm text-gray-400">{loadingMethods ? "Loading payment method..." : "Mobile Money is currently unavailable."}</p>}
                   {!isAuthenticated && <p className="mt-4 text-sm text-gray-400">Sign in to continue checkout.</p>}
                   <div className="mt-5 space-y-4">
                     <label className="block space-y-1 text-sm text-gray-400">Full name
                       <input value={fullName} onChange={(event) => setFullName(event.target.value)} className="dark-input w-full" autoComplete="name" />
                     </label>
-                    {method === "MTN_MOMO_RWA" && <label className="block space-y-1 text-sm text-gray-400">Mobile Money number
+                    <label className="block space-y-1 text-sm text-gray-400">Mobile Money number
                       <input value={payerPhone} onChange={(event) => setPayerPhone(event.target.value)} className="dark-input w-full" autoComplete="tel" placeholder="+2507XXXXXXXX" />
-                    </label>}
+                    </label>
                     {manualBotDelivery && <>
                       <label className="block space-y-1 text-sm text-gray-400">Bot delivery email
                         <input type="email" value={deliveryEmail} onChange={(event) => setDeliveryEmail(event.target.value)} className="dark-input w-full" autoComplete="email" />
@@ -324,8 +304,8 @@ function LmbtechCheckoutContent() {
                   {quoteError && <button type="button" onClick={() => setQuoteVersion((version) => version + 1)} className="mt-2 text-sm text-gold-300 underline">Refresh payment amount</button>}
                   {error && <p role="alert" className="mt-4 text-sm text-red-300">{error}</p>}
                   {loadingQuote && <p className="mt-4 text-sm text-gray-400">Calculating current RWF amount...</p>}
-                  <button type="button" onClick={() => void submitPayment()} disabled={!isAuthenticated || !quote || loadingQuote || loadingMethods || !availableMethods[method] || submitting || Boolean(quoteError)} className="gold-button mt-5 flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    <Check className="h-4 w-4" /> {submitting ? "Connecting to LMBTech..." : method === "card" ? "Continue to secure card payment" : "Request Mobile Money payment"}
+                  <button type="button" onClick={() => void submitPayment()} disabled={!isAuthenticated || !quote || loadingQuote || loadingMethods || !availableMethod || submitting || Boolean(quoteError)} className="gold-button mt-5 flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50">
+                    <Check className="h-4 w-4" /> {submitting ? "Connecting to LMBTech..." : "Request Mobile Money payment"}
                   </button>
                   <p className="mt-3 text-center text-xs text-gray-500">Payment confirmation is received from LMBTech and checked before access is granted.</p>
                 </>

@@ -177,7 +177,7 @@ export function SettingsTab() {
                         {activeSubTab === "payments" && (
                             <>
                                 <div>
-                                    <h3 className="border-b border-dark-800 pb-4 text-lg font-bold text-white">LMBTech checkout methods</h3>
+                                    <h3 className="border-b border-dark-800 pb-4 text-lg font-bold text-white">LMBTech payment</h3>
                                     <p className="mt-3 text-sm text-gray-500">Disabled methods are hidden from customers and rejected by the payment API.</p>
                                 </div>
                                 {toggleRow(
@@ -185,12 +185,6 @@ export function SettingsTab() {
                                     "Allow LMBTech MTN Rwanda Mobile Money payments.",
                                     settings.lmbtechMobileMoneyEnabled,
                                     (checked) => updateSetting("lmbtechMobileMoneyEnabled", checked),
-                                )}
-                                {toggleRow(
-                                    "Card",
-                                    "Allow LMBTech card payments through the secure Pesapal page.",
-                                    settings.lmbtechCardEnabled,
-                                    (checked) => updateSetting("lmbtechCardEnabled", checked),
                                 )}
                                 <LmbtechPayoutsPanel />
                             </>
