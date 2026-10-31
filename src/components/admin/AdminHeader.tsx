@@ -94,7 +94,10 @@ export function AdminHeader({ onMenuClick, onNavigate, title }: AdminHeaderProps
                     id: `payment:${payment.id}`,
                     kind: "transaction" as const,
                     title: wasUpdatedAfterCreation(payment.created_at, payment.updated_at) ? "Transaction updated" : "Payment transaction",
-                    description: `${payment.provider} · ${payment.status} · ${(Number(payment.amount_cents || 0) / 100).toFixed(2)} ${payment.currency}`,
+                    description: `${payment.provider} · ${payment.status} · ${new Intl.NumberFormat("en-US", {
+                        minimumFractionDigits: payment.currency === "RWF" ? 0 : 2,
+                        maximumFractionDigits: payment.currency === "RWF" ? 0 : 2,
+                    }).format(Number(payment.amount_cents || 0) / (payment.currency === "RWF" ? 1 : 100))} ${payment.currency}`,
                     createdAt: payment.updated_at || payment.created_at,
                     tab: "orders" as const,
                 })),

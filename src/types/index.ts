@@ -120,6 +120,12 @@ export interface Order {
     status: 'pending' | 'verifying' | 'paid' | 'rejected';
     rejection_reason: string | null;
   } | null;
+  lmbtech_payment_request?: {
+    reference_id: string;
+    payment_method: "MTN_MOMO_RWA" | "card";
+    amount_rwf: number;
+    status: "pending" | "success" | "failed" | "cancelled";
+  } | null;
   created_at: string;
   updated_at: string;
   product?: Product;

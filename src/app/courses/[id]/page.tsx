@@ -121,7 +121,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       router.push(`/login?redirect=/courses/${params.id}`);
       return;
     }
-    router.push(`/checkout?product=${params.id}`);
+    router.push(`/checkout/lmbtech?product=${params.id}`);
   };
 
   const handleStartLearning = () => {

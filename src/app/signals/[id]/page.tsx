@@ -148,7 +148,7 @@ export default function SignalPlanDetailPage({ params }: { params: { id: string 
       router.push(`/login?redirect=/signals/${params.id}`);
       return;
     }
-    router.push(`/checkout?product=${params.id}`);
+    router.push(`/checkout/lmbtech?product=${params.id}`);
   };
 
   if (isLoading) {

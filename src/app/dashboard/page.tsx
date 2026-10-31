@@ -247,6 +247,14 @@ function DashboardContent() {
           : { data: [], error: null };
         if (paymentRequestError) throw paymentRequestError;
         const paymentRequestByOrder = new Map((paymentRequestRows || []).map((row: any) => [row.order_id, row]));
+        const { data: lmbtechPaymentRows, error: lmbtechPaymentError } = orderIds.length
+          ? await supabase
+            .from("lmbtech_payment_requests")
+            .select("order_id, reference_id, payment_method, amount_rwf, status")
+            .in("order_id", orderIds)
+          : { data: [], error: null };
+        if (lmbtechPaymentError) throw lmbtechPaymentError;
+        const lmbtechPaymentByOrder = new Map((lmbtechPaymentRows || []).map((row: any) => [row.order_id, row]));
 
         setData({
           courses,
@@ -260,6 +268,7 @@ function DashboardContent() {
             product_type: order.product_type ?? order.product?.product_type ?? "course",
             delivery_status: deliveryStatusByOrder.get(order.id) ?? null,
             manual_payment_request: paymentRequestByOrder.get(order.id) ?? null,
+            lmbtech_payment_request: lmbtechPaymentByOrder.get(order.id) ?? null,
           })),
         });
       } catch (error) {
@@ -898,6 +907,11 @@ function DashboardContent() {
                                       }).format(order.manual_payment_request.amount_minor / (order.manual_payment_request.currency === 'RWF' ? 1 : 100))} {order.manual_payment_request.currency}
                                     </span>
                                   )}
+                                  {order.lmbtech_payment_request && (
+                                    <span className="block pt-1 text-xs font-normal text-gray-400">
+                                      LMBTech: {new Intl.NumberFormat("en-US").format(order.lmbtech_payment_request.amount_rwf)} RWF
+                                    </span>
+                                  )}
                                   {order.manual_payment_request && (
                                     <span className="block pt-1 text-xs font-normal text-gray-500">
                                       Display quote: {new Intl.NumberFormat('en-US', {
@@ -970,6 +984,12 @@ function DashboardContent() {
                                           </button>
                                         </div>
                                       )}
+                                    </div>
+                                  )}
+                                  {order.lmbtech_payment_request && (
+                                    <div className="mt-1 text-xs text-gray-300">
+                                      <span className="capitalize">LMBTech {order.lmbtech_payment_request.payment_method === "card" ? "card" : "Mobile Money"}: {order.lmbtech_payment_request.status}</span>
+                                      <p className="mt-1 text-gray-500">Reference: {order.lmbtech_payment_request.reference_id}</p>
                                     </div>
                                   )}
                                 </td>

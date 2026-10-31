@@ -127,7 +127,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
       router.push(`/login?redirect=/bots/${params.id}`);
       return;
     }
-    router.push(`/checkout?product=${params.id}`);
+    router.push(`/checkout/lmbtech?product=${params.id}`);
   };
 
   const handleDownload = async () => {
@@ -267,7 +267,7 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
             </div>
             {product.metadata?.delivery_method === 'manual_email' && (
               <p className="mt-6 text-sm text-gray-400">
-                This bot is delivered manually by email after Stripe confirms your payment. You will provide your full name, email, and MT5 account number at checkout.
+                This bot is delivered manually by email after LMBTech confirms your payment. You will provide your full name, email, and MT5 account number at checkout.
               </p>
             )}
 

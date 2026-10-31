@@ -90,6 +90,18 @@ async function getRwfPerUsd(): Promise<{ rate: number; asOf: string }> {
   };
 }
 
+export async function convertUsdCentsToRwf(amountCents: number) {
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+    throw new Error("Product price is not configured correctly.");
+  }
+  const { rate, asOf } = await getRwfPerUsd();
+  const amountRwf = Math.round((amountCents / 100) * rate);
+  if (!Number.isSafeInteger(amountRwf) || amountRwf <= 0) {
+    throw new Error("The converted payment amount is invalid.");
+  }
+  return { amountRwf, exchangeRate: rate, rateAsOf: asOf };
+}
+
 async function getUsdtPerUsd(): Promise<{ rate: number; asOf: string }> {
   const url = configuredUrl(
     process.env.PAYMENT_CRYPTO_RATE_API_URL,

@@ -6,6 +6,7 @@ import {
     DEFAULT_PLATFORM_SETTINGS,
     type PlatformSettings,
 } from "@/lib/platform-settings";
+import { LmbtechPayoutsPanel } from "@/components/admin/LmbtechPayoutsPanel";
 
 type SettingsSection = "general" | "payments" | "security" | "notifications";
 
@@ -176,21 +177,22 @@ export function SettingsTab() {
                         {activeSubTab === "payments" && (
                             <>
                                 <div>
-                                    <h3 className="border-b border-dark-800 pb-4 text-lg font-bold text-white">Checkout methods</h3>
+                                    <h3 className="border-b border-dark-800 pb-4 text-lg font-bold text-white">LMBTech checkout methods</h3>
                                     <p className="mt-3 text-sm text-gray-500">Disabled methods are hidden from customers and rejected by the payment API.</p>
                                 </div>
                                 {toggleRow(
                                     "Mobile Money",
-                                    "Allow manual MTN Rwanda Mobile Money payments.",
-                                    settings.mobileMoneyEnabled,
-                                    (checked) => updateSetting("mobileMoneyEnabled", checked),
+                                    "Allow LMBTech MTN Rwanda Mobile Money payments.",
+                                    settings.lmbtechMobileMoneyEnabled,
+                                    (checked) => updateSetting("lmbtechMobileMoneyEnabled", checked),
                                 )}
                                 {toggleRow(
-                                    "Binance Pay",
-                                    "Allow manual Binance ID / USDT payments.",
-                                    settings.binanceEnabled,
-                                    (checked) => updateSetting("binanceEnabled", checked),
+                                    "Card",
+                                    "Allow LMBTech card payments through the secure Pesapal page.",
+                                    settings.lmbtechCardEnabled,
+                                    (checked) => updateSetting("lmbtechCardEnabled", checked),
                                 )}
+                                <LmbtechPayoutsPanel />
                             </>
                         )}
 
