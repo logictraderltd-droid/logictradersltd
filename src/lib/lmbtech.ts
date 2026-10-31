@@ -10,6 +10,13 @@ export interface LmbtechApiResponse {
   [key: string]: unknown;
 }
 
+export class LmbtechReferenceNotFoundError extends Error {
+  constructor() {
+    super("LMBTech has no transaction for this reference.");
+    this.name = "LmbtechReferenceNotFoundError";
+  }
+}
+
 function getCredentials() {
   const appKey = process.env.LMBTECH_APP_KEY?.trim();
   const secretKey = process.env.LMBTECH_SECRET_KEY?.trim();
@@ -38,6 +45,7 @@ async function requestLmbtech(url: URL, init: RequestInit) {
   });
   const body: unknown = await response.json().catch(() => null);
   const record = getRecord(body);
+  if (response.status === 404) throw new LmbtechReferenceNotFoundError();
   if (!response.ok || !record) {
     throw new Error(`LMBTech request failed with HTTP ${response.status}.`);
   }

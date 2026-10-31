@@ -6,7 +6,9 @@ import { verifyManualPaymentQuote, type ManualPaymentQuote } from "@/lib/manual-
 import {
   getLmbtechCallbackUrl,
   initiateLmbtechCollection,
+  LmbtechReferenceNotFoundError,
 } from "@/lib/lmbtech";
+import { reconcileLmbtechPayment } from "@/lib/lmbtech-reconciliation";
 import { NextResponse } from "next/server";
 
 function cleanString(value: unknown) {
@@ -111,17 +113,40 @@ export async function POST(request: Request) {
     stage = "checking pending payment";
     const { data: existingRequest, error: existingError } = await admin
       .from("lmbtech_payment_requests")
-      .select("reference_id, payment_method, amount_rwf, status, redirect_url")
+      .select("reference_id, order_id, payment_method, amount_rwf, status, redirect_url")
       .eq("user_id", user.id)
       .eq("product_id", product.id)
       .eq("status", "pending")
       .maybeSingle();
     if (existingError) throw existingError;
     if (existingRequest) {
-      return NextResponse.json({
-        request: existingRequest,
-        reused: true,
-      });
+      try {
+        const transaction = await reconcileLmbtechPayment(existingRequest.reference_id);
+        return NextResponse.json({
+          request: { ...existingRequest, status: transaction.status },
+          reused: true,
+        });
+      } catch (statusError) {
+        if (!(statusError instanceof LmbtechReferenceNotFoundError)) throw statusError;
+        const { error: paymentUpdateError } = await admin
+          .from("lmbtech_payment_requests")
+          .update({ status: "failed" })
+          .eq("reference_id", existingRequest.reference_id)
+          .eq("status", "pending");
+        if (paymentUpdateError) throw paymentUpdateError;
+        const { error: orderUpdateError } = await admin
+          .from("orders")
+          .update({ status: "failed", updated_at: new Date().toISOString() })
+          .eq("id", existingRequest.order_id)
+          .eq("status", "pending");
+        if (orderUpdateError) throw orderUpdateError;
+        const { error: deliveryUpdateError } = await admin
+          .from("bot_delivery_requests")
+          .update({ status: "payment_failed", updated_at: new Date().toISOString() })
+          .eq("order_id", existingRequest.order_id)
+          .eq("status", "pending_payment");
+        if (deliveryUpdateError) throw deliveryUpdateError;
+      }
     }
 
     const { data: existingManualRequest, error: existingManualError } = await admin
