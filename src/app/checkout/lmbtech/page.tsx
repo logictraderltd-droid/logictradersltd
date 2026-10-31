@@ -24,7 +24,7 @@ interface Quote {
 
 interface PaymentRequest {
   reference_id: string;
-  payment_method: PaymentMethod | "card";
+  payment_method: PaymentMethod;
   amount_rwf: number;
   status: PaymentStatus;
   redirect_url: string | null;
@@ -34,7 +34,6 @@ function LmbtechCheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const productId = searchParams.get("product");
-  const returnReference = searchParams.get("lmbtech_reference");
   const { isAuthenticated, user } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(true);
@@ -129,17 +128,6 @@ function LmbtechCheckoutContent() {
     void loadQuote();
     return () => { cancelled = true; };
   }, [product?.id, product?.metadata?.is_free, isAuthenticated, quoteVersion]);
-
-  useEffect(() => {
-    if (!returnReference) return;
-    setPaymentRequest({
-      reference_id: returnReference,
-      payment_method: "card",
-      amount_rwf: 0,
-      status: "pending",
-      redirect_url: null,
-    });
-  }, [returnReference]);
 
   const pendingReferenceId = paymentRequest?.status === "pending" ? paymentRequest.reference_id : null;
 

@@ -122,7 +122,7 @@ export interface Order {
   } | null;
   lmbtech_payment_request?: {
     reference_id: string;
-    payment_method: "MTN_MOMO_RWA" | "card";
+    payment_method: "MTN_MOMO_RWA";
     amount_rwf: number;
     status: "pending" | "success" | "failed" | "cancelled";
   } | null;

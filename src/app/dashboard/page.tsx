@@ -988,7 +988,7 @@ function DashboardContent() {
                                   )}
                                   {order.lmbtech_payment_request && (
                                     <div className="mt-1 text-xs text-gray-300">
-                                      <span className="capitalize">LMBTech {order.lmbtech_payment_request.payment_method === "card" ? "card" : "Mobile Money"}: {order.lmbtech_payment_request.status}</span>
+                                      <span className="capitalize">LMBTech Mobile Money: {order.lmbtech_payment_request.status}</span>
                                       <p className="mt-1 text-gray-500">Reference: {order.lmbtech_payment_request.reference_id}</p>
                                     </div>
                                   )}

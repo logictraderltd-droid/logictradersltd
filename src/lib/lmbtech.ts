@@ -29,7 +29,7 @@ async function requestLmbtech(url: URL, init: RequestInit) {
   const response = await fetch(url, {
     ...init,
     cache: "no-store",
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(30000),
     headers: {
       Authorization: getCredentials(),
       Accept: "application/json",
