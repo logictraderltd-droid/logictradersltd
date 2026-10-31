@@ -6,9 +6,7 @@ import { verifyManualPaymentQuote, type ManualPaymentQuote } from "@/lib/manual-
 import {
   getLmbtechCallbackUrl,
   initiateLmbtechCollection,
-  LmbtechReferenceNotFoundError,
 } from "@/lib/lmbtech";
-import { reconcileLmbtechPayment } from "@/lib/lmbtech-reconciliation";
 import { NextResponse } from "next/server";
 
 function cleanString(value: unknown) {
@@ -120,33 +118,10 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (existingError) throw existingError;
     if (existingRequest) {
-      try {
-        const transaction = await reconcileLmbtechPayment(existingRequest.reference_id);
-        return NextResponse.json({
-          request: { ...existingRequest, status: transaction.status },
-          reused: true,
-        });
-      } catch (statusError) {
-        if (!(statusError instanceof LmbtechReferenceNotFoundError)) throw statusError;
-        const { error: paymentUpdateError } = await admin
-          .from("lmbtech_payment_requests")
-          .update({ status: "failed" })
-          .eq("reference_id", existingRequest.reference_id)
-          .eq("status", "pending");
-        if (paymentUpdateError) throw paymentUpdateError;
-        const { error: orderUpdateError } = await admin
-          .from("orders")
-          .update({ status: "failed", updated_at: new Date().toISOString() })
-          .eq("id", existingRequest.order_id)
-          .eq("status", "pending");
-        if (orderUpdateError) throw orderUpdateError;
-        const { error: deliveryUpdateError } = await admin
-          .from("bot_delivery_requests")
-          .update({ status: "payment_failed", updated_at: new Date().toISOString() })
-          .eq("order_id", existingRequest.order_id)
-          .eq("status", "pending_payment");
-        if (deliveryUpdateError) throw deliveryUpdateError;
-      }
+      return NextResponse.json({
+        request: existingRequest,
+        reused: true,
+      });
     }
 
     const { data: existingManualRequest, error: existingManualError } = await admin
