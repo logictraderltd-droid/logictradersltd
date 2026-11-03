@@ -170,7 +170,7 @@ export default function BotsPage() {
                         <h3 className="text-xl font-bold group-hover:text-gold-400 transition-colors">
                           {bot.name}
                         </h3>
-                        <p className="text-sm text-gray-500 mt-1">{bot.description}</p>
+                        <p className="mt-1 min-h-10 line-clamp-2 text-sm text-gray-500">{bot.description}</p>
                       </div>
                     </div>
 
