@@ -29,6 +29,7 @@ import {
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { createBrowserClient } from "@/lib/supabase"; // Updated import
+import { InlineVideo } from "@/components/InlineVideo";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import {
   User as SupabaseUser,
@@ -42,7 +43,10 @@ import {
 interface DashboardData {
   courses: Course[];
   subscriptions: Subscription[];
-  bots: TradingBot[];
+  bots: (TradingBot & {
+    manual_delivery_status?: string | null;
+    private_delivery_url?: string | null;
+  })[];
   recentSignals: TradingSignal[];
   paymentHistory: Order[];
 }
@@ -184,10 +188,29 @@ function DashboardContent() {
           const product = Array.isArray(access.products) ? access.products[0] : access.products;
           return product?.product_type === "bot";
         }).map((access) => access.product_id);
-        const receivedBotIds = (deliveryRows || [])
-          .filter((delivery: any) => delivery.status === "received")
+        const manualDeliveryStatuses = ["pending_delivery", "delivered", "received"];
+        const manualDeliveryRows = (deliveryRows || [])
+          .filter((delivery: any) => manualDeliveryStatuses.includes(delivery.status));
+        const manualBotIds = manualDeliveryRows
           .map((delivery: any) => delivery.product_id);
-        const allBotIds = Array.from(new Set([...botIds, ...receivedBotIds]));
+        const allBotIds = Array.from(new Set([...botIds, ...manualBotIds]));
+
+        const manualDeliveryMaterialsByProduct = new Map<string, { status: string; link_url: string | null }>();
+        if (manualDeliveryRows.length > 0) {
+          try {
+            const materialsResponse = await fetch("/api/dashboard/manual-bot-materials", { cache: "no-store" });
+            const materialsResult = await materialsResponse.json();
+            if (!materialsResponse.ok) throw new Error(materialsResult.error || "Unable to load private bot materials.");
+            for (const material of materialsResult.materials || []) {
+              manualDeliveryMaterialsByProduct.set(material.product_id, {
+                status: material.status,
+                link_url: material.link_url,
+              });
+            }
+          } catch (materialsError) {
+            console.error("Unable to load private manual bot materials:", materialsError);
+          }
+        }
 
         let bots: TradingBot[] = [];
         if (allBotIds.length > 0) {
@@ -196,19 +219,25 @@ function DashboardContent() {
             .select("*")
             .in("id", allBotIds);
           if (botDataError) throw botDataError;
-          const { data: botLinks, error: botLinksError } = await supabase
-            .from("bot_links")
-            .select("product_id, download_url, instructions")
-            .in("product_id", allBotIds);
+          const { data: botLinks, error: botLinksError } = botIds.length
+            ? await supabase
+              .from("bot_links")
+              .select("product_id, download_url, instructions")
+              .in("product_id", botIds)
+            : { data: [], error: null };
           if (botLinksError) throw botLinksError;
           const botLinksByProduct = new Map((botLinks || []).map((link: any) => [link.product_id, link]));
           bots = (botData || []).map((bot: any) => {
             const botLink = botLinksByProduct.get(bot.id);
+            const manualDelivery = manualDeliveryMaterialsByProduct.get(bot.id);
+            const deliveryStatus = manualDelivery?.status || manualDeliveryRows.find((row: any) => row.product_id === bot.id)?.status || null;
             return {
               ...bot,
               type: "bot",
               download_url: botLink?.download_url || undefined,
               setup_instructions: botLink?.instructions || undefined,
+              manual_delivery_status: deliveryStatus,
+              private_delivery_url: manualDelivery?.link_url || null,
             };
           });
         }
@@ -817,6 +846,27 @@ function DashboardContent() {
                           </div>
 
                           <p className="text-gray-400 text-sm mb-8 flex-1 leading-relaxed">{bot.description}</p>
+
+                          {typeof bot.metadata?.demo_video_url === "string" && bot.metadata.demo_video_url && (
+                            <div className="mb-5 space-y-2">
+                              <h4 className="text-sm font-semibold text-white">Bot demonstration</h4>
+                              <InlineVideo url={bot.metadata.demo_video_url} title={`${bot.name} demonstration`} />
+                            </div>
+                          )}
+
+                          {bot.metadata?.delivery_method === "manual_email" && bot.manual_delivery_status && (
+                            <div className="mb-5 space-y-3 rounded-xl border border-gold-500/20 bg-gold-500/5 p-4">
+                              <p className="text-sm font-semibold text-gold-300">
+                                Manual delivery · {bot.manual_delivery_status.replaceAll("_", " ")}
+                              </p>
+                              {bot.private_delivery_url && (
+                                <div className="space-y-2">
+                                  <h4 className="text-sm font-medium text-white">Your private delivery video</h4>
+                                  <InlineVideo url={bot.private_delivery_url} title={`${bot.name} private delivery video`} />
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           <div className="grid grid-cols-2 gap-4 mt-auto">
                             {bot.metadata?.delivery_method === "manual_email" ? (
