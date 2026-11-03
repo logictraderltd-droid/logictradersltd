@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Play, Video, Volume2, VolumeX, Youtube, Instagram, Facebook, Send, Music2, Globe, Maximize2, Minimize2 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 
@@ -56,6 +56,27 @@ function getYouTubeEmbedUrl(value: string, muted: boolean) {
   }
 }
 
+function getVisibleShortId(feed: HTMLElement) {
+  const feedRect = feed.getBoundingClientRect();
+  const visibleTop = Math.max(feedRect.top, 0);
+  const visibleBottom = Math.min(feedRect.bottom, window.innerHeight);
+  if (visibleBottom <= visibleTop) return null;
+
+  const visibleShorts = Array.from(feed.querySelectorAll<HTMLElement>("article[data-short-id]"))
+    .map((short) => {
+      const rect = short.getBoundingClientRect();
+      const visibleHeight = Math.max(0, Math.min(rect.bottom, visibleBottom) - Math.max(rect.top, visibleTop));
+      return {
+        id: short.dataset.shortId || "",
+        ratio: visibleHeight / Math.max(rect.height, 1),
+      };
+    })
+    .filter((short) => short.id && short.ratio >= 0.6)
+    .sort((first, second) => second.ratio - first.ratio);
+
+  return visibleShorts[0]?.id || null;
+}
+
 const shortsNavigation = [
   { label: "Home", href: "/" },
   { label: "Courses", href: "/courses" },
@@ -102,6 +123,59 @@ export default function Hero() {
   const [hasCustomMarketing, setHasCustomMarketing] = useState(false);
   const [isFullscreenShorts, setIsFullscreenShorts] = useState(false);
   const [fullscreenStartId, setFullscreenStartId] = useState<string | null>(null);
+  const [activeShortId, setActiveShortId] = useState<string | null>(null);
+  const inlineShortsFeedRef = useRef<HTMLDivElement>(null);
+  const fullscreenShortsFeedRef = useRef<HTMLDivElement>(null);
+  const previousActiveShortIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const feed = isFullscreenShorts ? fullscreenShortsFeedRef.current : inlineShortsFeedRef.current;
+    if (!feed || shorts.length === 0) {
+      setActiveShortId(null);
+      return;
+    }
+
+    const updateActiveShort = () => setActiveShortId(getVisibleShortId(feed));
+    const observer = new IntersectionObserver(
+      updateActiveShort,
+      { root: feed, threshold: [0, 0.25, 0.5, 0.6, 0.75, 1] },
+    );
+    feed.querySelectorAll<HTMLElement>("[data-short-id]").forEach((short) => observer.observe(short));
+
+    let frame = 0;
+    const updateOnPageScroll = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateActiveShort);
+    };
+    window.addEventListener("scroll", updateOnPageScroll, { capture: true, passive: true });
+    window.addEventListener("resize", updateOnPageScroll);
+    updateActiveShort();
+
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", updateOnPageScroll, true);
+      window.removeEventListener("resize", updateOnPageScroll);
+    };
+  }, [isFullscreenShorts, shorts]);
+
+  useEffect(() => {
+    const activeShortChanged = activeShortId !== previousActiveShortIdRef.current;
+    previousActiveShortIdRef.current = activeShortId;
+    if (activeShortChanged && activeShortId) setMuted(true);
+
+    document.querySelectorAll<HTMLVideoElement>("video[data-short-video]").forEach((video) => {
+      const sameFeed = video.dataset.fullscreen === String(isFullscreenShorts);
+      const shouldPlay = sameFeed && video.dataset.shortId === activeShortId;
+      video.muted = !shouldPlay || muted || activeShortChanged;
+
+      if (shouldPlay) {
+        void video.play().catch(() => undefined);
+      } else {
+        video.pause();
+      }
+    });
+  }, [activeShortId, isFullscreenShorts, muted]);
 
   useEffect(() => {
     if (!isFullscreenShorts) return;
@@ -125,16 +199,19 @@ export default function Hero() {
 
   const openFullscreenShorts = (shortId: string) => {
     setMuted(true);
+    setActiveShortId(shortId);
     setFullscreenStartId(shortId);
     setIsFullscreenShorts(true);
   };
 
   const renderShort = (short: ShortVideo, fullscreen = false) => {
-    const youtubeEmbedUrl = short.source === "youtube" ? getYouTubeEmbedUrl(short.video_url, muted) : null;
+    const isActive = short.id === activeShortId && fullscreen === isFullscreenShorts;
+    const youtubeEmbedUrl = short.source === "youtube" && isActive ? getYouTubeEmbedUrl(short.video_url, muted) : null;
     return (
       <article
       key={`${fullscreen ? "fullscreen-" : "inline-"}${short.id}`}
       id={fullscreen ? `fullscreen-short-${short.id}` : undefined}
+      data-short-id={short.id}
       role={fullscreen ? undefined : "button"}
       tabIndex={fullscreen ? undefined : 0}
       onClick={() => {
@@ -157,17 +234,15 @@ export default function Hero() {
           allowFullScreen
         />
       ) : short.source === "youtube" ? (
-        <a
-          href={short.video_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex h-full w-full items-center justify-center text-sm font-semibold text-white underline"
-          onClick={(event) => event.stopPropagation()}
-        >
-          Open this YouTube video
-        </a>
+        <div className="relative flex h-full w-full items-center justify-center bg-dark-900">
+          {short.thumbnail_url && <img src={short.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />}
+          <div className="relative flex flex-col items-center gap-2 text-sm text-white">
+            <Play className="h-9 w-9" />
+            <span>{isActive ? "Loading video..." : "Scroll to play"}</span>
+          </div>
+        </div>
       ) : (
-        <video className="h-full w-full object-cover" src={short.video_url} poster={short.thumbnail_url} muted={muted} loop playsInline autoPlay />
+        <video data-short-video data-short-id={short.id} data-fullscreen={fullscreen} className="h-full w-full object-cover" src={short.video_url} poster={short.thumbnail_url} muted={!isActive || muted} loop playsInline />
       )}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent p-5 pt-24">
         <span className="mb-2 inline-block rounded-full bg-gold-500/90 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-dark-950">{short.type}</span>
@@ -387,7 +462,7 @@ export default function Hero() {
               {isLoadingShorts ? (
                 <div className="flex h-[420px] sm:h-[520px] items-center justify-center rounded-2xl border border-gold-500/20 bg-dark-900/80"><div className="spinner" /></div>
               ) : shorts.length > 0 ? (
-                <div className="shorts-feed h-[420px] sm:h-[520px] snap-y snap-mandatory overflow-y-auto rounded-2xl border border-gold-500/20 bg-dark-900/80 shadow-2xl shadow-black/30">
+                <div ref={inlineShortsFeedRef} className="shorts-feed h-[420px] sm:h-[520px] snap-y snap-mandatory overflow-y-auto rounded-2xl border border-gold-500/20 bg-dark-900/80 shadow-2xl shadow-black/30">
                   {shorts.map((short) => renderShort(short))}
                 </div>
               ) : (
@@ -423,7 +498,7 @@ export default function Hero() {
               <Minimize2 className="h-4 w-4" />
             </button>
           </header>
-          <div className="shorts-feed absolute inset-x-0 bottom-0 top-16 snap-y snap-mandatory overflow-y-auto overscroll-contain">
+          <div ref={fullscreenShortsFeedRef} className="shorts-feed absolute inset-x-0 bottom-0 top-16 snap-y snap-mandatory overflow-y-auto overscroll-contain">
             {shorts.map((short) => renderShort(short, true))}
           </div>
         </div>
