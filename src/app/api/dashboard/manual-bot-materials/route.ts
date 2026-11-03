@@ -21,7 +21,7 @@ export async function GET() {
       return NextResponse.json({ materials: [] }, { headers: { "Cache-Control": "private, no-store" } });
     }
 
-    const orderIds = [...new Set(deliveries.map((delivery) => delivery.order_id))];
+    const orderIds = Array.from(new Set(deliveries.map((delivery) => delivery.order_id)));
     const { data: orders, error: orderError } = await admin
       .from("orders")
       .select("id, product_id, product_type, status, metadata")
