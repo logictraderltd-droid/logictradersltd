@@ -126,7 +126,6 @@ export default function Hero() {
   const [activeShortId, setActiveShortId] = useState<string | null>(null);
   const inlineShortsFeedRef = useRef<HTMLDivElement>(null);
   const fullscreenShortsFeedRef = useRef<HTMLDivElement>(null);
-  const previousActiveShortIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const feed = isFullscreenShorts ? fullscreenShortsFeedRef.current : inlineShortsFeedRef.current;
@@ -160,14 +159,10 @@ export default function Hero() {
   }, [isFullscreenShorts, shorts]);
 
   useEffect(() => {
-    const activeShortChanged = activeShortId !== previousActiveShortIdRef.current;
-    previousActiveShortIdRef.current = activeShortId;
-    if (activeShortChanged && activeShortId) setMuted(true);
-
     document.querySelectorAll<HTMLVideoElement>("video[data-short-video]").forEach((video) => {
       const sameFeed = video.dataset.fullscreen === String(isFullscreenShorts);
       const shouldPlay = sameFeed && video.dataset.shortId === activeShortId;
-      video.muted = !shouldPlay || muted || activeShortChanged;
+      video.muted = !shouldPlay || muted;
 
       if (shouldPlay) {
         void video.play().catch(() => undefined);
@@ -198,7 +193,6 @@ export default function Hero() {
   }, [isFullscreenShorts, fullscreenStartId]);
 
   const openFullscreenShorts = (shortId: string) => {
-    setMuted(true);
     setActiveShortId(shortId);
     setFullscreenStartId(shortId);
     setIsFullscreenShorts(true);
