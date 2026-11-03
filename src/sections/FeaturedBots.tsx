@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Bot, Cpu, Download, Settings } from "lucide-react";
+import { ArrowRight, Bot, Download, Settings } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 import { useNearViewport } from "@/lib/useNearViewport";
 
@@ -12,7 +12,12 @@ interface FeaturedBot {
   name: string;
   description: string;
   price: number;
-  metadata?: Record<string, any>;
+  thumbnail_url: string | null;
+  metadata?: {
+    bot_type?: string;
+    delivery_method?: string;
+    features?: unknown;
+  };
 }
 
 const containerVariants = {
@@ -48,7 +53,7 @@ export default function FeaturedBots() {
         const supabase = createBrowserClient();
         const { data, error } = await supabase
           .from("products")
-          .select("id,name,description,price_cents,metadata,product_type,created_at")
+          .select("id,name,description,price_cents,thumbnail_url,metadata,product_type,created_at")
           .eq("is_active", true)
           .eq("product_type", "bot")
           .order("created_at", { ascending: false })
@@ -56,10 +61,13 @@ export default function FeaturedBots() {
 
         if (error) throw error;
 
-        setBots((data || []).map((item: any) => ({
-          ...item,
-          type: item.product_type,
+        setBots((data || []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          description: item.description || "",
           price: Number(item.price_cents ?? 0) / 100,
+          thumbnail_url: item.thumbnail_url,
+          metadata: item.metadata,
         })));
       } catch (error) {
         console.error("Unable to load featured bots:", error);
@@ -105,12 +113,15 @@ export default function FeaturedBots() {
             className="grid gap-6 sm:gap-8 md:grid-cols-2 max-w-4xl mx-auto"
           >
             {bots.map((bot, index) => {
-              const Icon = index % 2 === 0 ? Bot : Cpu;
-              const features = Array.isArray(bot.metadata?.features) ? bot.metadata.features : [
-                "Automation",
-                "Risk controls",
-                "Market coverage"
-              ];
+              const features = Array.isArray(bot.metadata?.features)
+                ? bot.metadata.features.filter((feature): feature is string => typeof feature === "string")
+                : [];
+              const botType = typeof bot.metadata?.bot_type === "string" && bot.metadata.bot_type.trim()
+                ? bot.metadata.bot_type
+                : "Trading Bot";
+              const deliveryMethod = bot.metadata?.delivery_method === "manual_email"
+                ? "Manual email delivery"
+                : "Automatic download";
 
               return (
                 <motion.div
@@ -118,22 +129,29 @@ export default function FeaturedBots() {
                   variants={itemVariants}
                   className="dark-card overflow-hidden group"
                 >
-                  <div className="p-4 sm:p-8">
-                    <div className="flex items-start justify-between mb-5 sm:mb-6">
-                      <div className="flex items-center space-x-3 sm:space-x-4">
-                        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-gold-500/20 to-gold-600/10 flex items-center justify-center group-hover:from-gold-500/30 group-hover:to-gold-600/20 transition-all">
-                          <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-gold-400" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg sm:text-xl font-bold group-hover:text-gold-400 transition-colors">
-                            {bot.name}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-gray-500 mt-1">{bot.description}</p>
-                        </div>
+                  <div className="relative aspect-video overflow-hidden bg-dark-900">
+                    {bot.thumbnail_url ? (
+                      <img src={bot.thumbnail_url} alt={bot.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-gold-400/40">
+                        <Bot className="h-14 w-14" />
                       </div>
-                    </div>
+                    )}
+                    <span className="absolute left-3 top-3 border border-gold-500/30 bg-dark-950/85 px-3 py-1 text-xs font-semibold text-gold-200">
+                      {botType}
+                    </span>
+                  </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                  <div className="p-4 sm:p-6">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <h3 className="text-lg font-bold text-white transition-colors group-hover:text-gold-400 sm:text-xl">
+                        {bot.name}
+                      </h3>
+                    </div>
+                    <p className="mb-3 line-clamp-2 min-h-10 text-sm text-gray-400">{bot.description}</p>
+                    <p className="mb-4 text-xs font-semibold text-gold-300">Delivery: {deliveryMethod}</p>
+
+                    {features.length > 0 && <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {features.map((feature, i) => (
                         <div
                           key={i}
@@ -143,9 +161,9 @@ export default function FeaturedBots() {
                           <span>{feature}</span>
                         </div>
                       ))}
-                    </div>
+                    </div>}
 
-                    <div className="flex items-center justify-between gap-3 pt-6 border-t border-dark-800">
+                    <div className="flex items-center justify-between gap-3 border-t border-dark-800 pt-4">
                       <div className="text-xl sm:text-2xl font-bold gold-gradient-text">
                         ${Number(bot.price || 0).toFixed(2)}
                       </div>
