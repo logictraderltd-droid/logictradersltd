@@ -29,7 +29,11 @@ export default function BotsPage() {
       } else {
         setBots((data || [])
           .filter((item: any) => (item.product_type ?? item.type ?? "").toString().toLowerCase() === "bot")
-          .map((item: any) => ({ ...item, type: item.product_type ?? item.type ?? "bot" })));
+          .map((item: any) => ({
+            ...item,
+            type: item.product_type ?? item.type ?? "bot",
+            price: Number(item.price ?? (Number(item.price_cents ?? 0) / 100)),
+          })));
       }
       setIsLoading(false);
     };
