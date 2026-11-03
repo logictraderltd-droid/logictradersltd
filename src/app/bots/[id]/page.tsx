@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Bot,
@@ -11,10 +10,6 @@ import {
   Check,
   ShoppingCart,
   FileText,
-  Settings,
-  Shield,
-  Zap,
-  TrendingUp,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { createBrowserClient } from "@/lib/supabase";
@@ -186,305 +181,121 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
     );
   }
 
+  const features = Array.isArray(product.metadata?.features)
+    ? product.metadata.features.filter((feature: unknown): feature is string => typeof feature === "string")
+    : [];
+  const requirements = Array.isArray(product.metadata?.requirements)
+    ? product.metadata.requirements.filter((requirement: unknown): requirement is string => typeof requirement === "string")
+    : [];
+  const deliveryMethod = product.metadata?.delivery_method === "manual_email"
+    ? "Manual email delivery"
+    : "Automatic download";
+
   return (
-    <div className="min-h-screen bg-dark-950">
-      {/* Hero Section */}
-      <section className="relative py-20 border-b border-dark-800">
-        <div className="absolute inset-0 bg-gradient-to-b from-gold-500/5 to-transparent" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <Link
-            href="/bots"
-            className="inline-flex items-center text-gray-400 hover:text-gold-400 mb-8 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Trading Bots
+    <main className="min-h-screen bg-dark-950">
+      <section className="py-8 sm:py-12">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <Link href="/bots" className="mb-6 inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-gold-400">
+            <ArrowLeft className="h-4 w-4" /> Back to Trading Bots
           </Link>
 
-          <div className="grid lg:grid-cols-2 gap-12">
-            {/* Bot Info */}
-            <div>
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-gold-500/20 text-gold-400 text-sm mb-4">
-                {product.metadata?.bot_type || "Trading Bot"}
-              </div>
-
-              <h1 className="text-4xl font-bold mb-4 gold-gradient-text">
-                {product.name}
-              </h1>
-
-              <p className="text-gray-300 text-lg mb-6">{product.description}</p>
-              {product.metadata?.demo_video_url && (
-                <a href={product.metadata.demo_video_url} target="_blank" rel="noreferrer" className="mb-6 inline-flex text-gold-300 underline">
-                  Watch bot demonstration
-                </a>
-              )}
-
-              {/* Key Features */}
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="flex items-center text-gray-300">
-                  <Zap className="w-5 h-5 mr-2 text-gold-400" />
-                  <span>{product.metadata?.bot_type || "Trading Bot"}</span>
-                </div>
-                <div className="flex items-center text-gray-300">
-                  <Shield className="w-5 h-5 mr-2 text-gold-400" />
-                  <span>Risk Management</span>
-                </div>
-                <div className="flex items-center text-gray-300">
-                  <TrendingUp className="w-5 h-5 mr-2 text-gold-400" />
-                  <span>Payment-verified delivery</span>
-                </div>
-                <div className="flex items-center text-gray-300">
-                  <Settings className="w-5 h-5 mr-2 text-gold-400" />
-                  <span>Customizable</span>
-                </div>
-              </div>
-
-              {/* Price and CTA */}
-              <div className="flex items-center space-x-4">
-                <div className="text-3xl font-bold gold-gradient-text">
-                  ${product.price}
-                </div>
-                {product.metadata?.delivery_method === 'manual_email' &&
-                (deliveryStatus === 'pending_delivery' || deliveryStatus === 'delivered') ? (
-                  <span className="rounded-lg border border-gold-500/30 px-4 py-3 text-sm text-gold-300">
-                    Delivery: {deliveryStatus.replace('_', ' ')}
-                  </span>
-                ) : hasAccess ? (
-                  <button
-                    onClick={handleDownload}
-                    disabled={isDownloading}
-                    className="gold-button flex items-center"
-                  >
-                    <Download className="w-5 h-5 mr-2" />
-                    {isDownloading ? "Downloading..." : "Download Bot"}
-                  </button>
-                ) : (
-                  <button onClick={handlePurchase} className="gold-button flex items-center">
-                    <ShoppingCart className="w-5 h-5 mr-2" />
-                    Purchase Bot
-                  </button>
-                )}
-              </div>
-            </div>
-            {product.metadata?.delivery_method === 'manual_email' && (
-              <p className="mt-6 text-sm text-gray-400">
-                This bot is delivered manually by email after LMBTech confirms your payment. You will provide your full name, email, and MT5 account number at checkout.
-              </p>
-            )}
-
-            {/* Bot Image/Preview */}
-            <div className="relative">
-              <div className="aspect-video rounded-2xl overflow-hidden bg-dark-900">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
+            <section className="dark-card overflow-hidden">
+              <div className="relative aspect-video bg-dark-900">
                 {product.thumbnail_url ? (
-                  <img
-                    src={product.thumbnail_url}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={product.thumbnail_url} alt={product.name} className="h-full w-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Bot className="w-32 h-32 text-gold-400" />
+                  <div className="flex h-full w-full items-center justify-center text-gold-400/50">
+                    <Bot className="h-16 w-16" />
+                  </div>
+                )}
+                <span className="absolute left-3 top-3 border border-gold-500/30 bg-dark-950/85 px-3 py-1 text-xs font-semibold text-gold-200">
+                  {product.metadata?.bot_type || "Trading Bot"}
+                </span>
+              </div>
+
+              <div className="p-5 sm:p-6">
+                <h1 className="text-xl font-bold text-white sm:text-2xl">{product.name}</h1>
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-400">{product.description}</p>
+
+                {product.metadata?.demo_video_url && (
+                  <a href={product.metadata.demo_video_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm text-gold-300 underline">
+                    Watch bot demonstration
+                  </a>
+                )}
+
+                {Array.isArray(product.metadata?.features) && product.metadata.features.length > 0 && (
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                    {product.metadata.features.map((feature: unknown, index: number) => typeof feature === "string" && (
+                      <div key={`${feature}-${index}`} className="flex items-start gap-2 text-sm text-gray-300">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-            </div>
+            </section>
+
+            <aside className="space-y-4">
+              <section className="dark-card p-5 sm:p-6">
+                <p className="text-sm text-gray-500">Price</p>
+                <p className="mt-1 text-2xl font-bold gold-gradient-text">{product.currency === "RWF" ? `${new Intl.NumberFormat("en-US").format(product.price)} RWF` : `$${Number(product.price).toFixed(2)}`}</p>
+                <p className="mt-4 border-t border-dark-800 pt-4 text-sm text-gray-400">Delivery: <span className="text-gray-200">{product.metadata?.delivery_method === "manual_email" ? "Manual email" : "Automatic download"}</span></p>
+                {product.metadata?.delivery_method === "manual_email" && (deliveryStatus === "pending_delivery" || deliveryStatus === "delivered") ? (
+                  <p className="mt-3 rounded border border-gold-500/30 bg-gold-500/5 p-3 text-sm text-gold-300">
+                    Delivery status: {deliveryStatus.replace("_", " ")}
+                  </p>
+                ) : hasAccess ? (
+                  <button onClick={handleDownload} disabled={isDownloading} className="gold-button mt-5 flex w-full items-center justify-center gap-2 disabled:opacity-50">
+                    <Download className="h-4 w-4" /> {isDownloading ? "Preparing download..." : "Download bot"}
+                  </button>
+                ) : (
+                  <button onClick={handlePurchase} className="gold-button mt-5 flex w-full items-center justify-center gap-2">
+                    <ShoppingCart className="h-4 w-4" /> Get bot
+                  </button>
+                )}
+                {product.metadata?.delivery_method === "manual_email" && !hasAccess && (
+                  <p className="mt-3 text-xs leading-5 text-gray-500">After payment is verified, provide your delivery email and MT5 account number at checkout.</p>
+                )}
+                {hasAccess && <p className="mt-3 text-center text-xs text-green-300">Purchase verified</p>}
+              </section>
+
+              <section className="border-t border-dark-800 px-1 pt-4 text-xs leading-5 text-gray-500">
+                Trading bots carry market risk. No strategy or bot guarantees profit.
+                <a href={getSupportGmailUrl(`Support for ${product.name}`, `Hello Logic Traders support,\n\nI need help with ${product.name}.\n\n`)} target="_blank" rel="noopener noreferrer" className="ml-1 text-gold-300 underline">Contact support</a>
+              </section>
+            </aside>
           </div>
+
+          {Array.isArray(product.metadata?.requirements) && product.metadata.requirements.length > 0 && (
+            <section className="mt-6 border-t border-dark-800 pt-5">
+              <h2 className="text-base font-semibold text-white">Requirements</h2>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {product.metadata.requirements.map((requirement: unknown, index: number) => typeof requirement === "string" && (
+                  <li key={`${requirement}-${index}`} className="border border-dark-700 px-3 py-2 text-sm text-gray-300">{requirement}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {bot?.instructions && hasAccess && (
+            <section className="mt-6 border-t border-dark-800 pt-5">
+              <h2 className="text-base font-semibold text-white">Setup instructions</h2>
+              <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-300">{bot.instructions}</p>
+            </section>
+          )}
+
+          {bot?.link_url && hasAccess && (
+            <section className="mt-5 border-t border-dark-800 pt-5">
+              <h2 className="text-base font-semibold text-white">Bot information link</h2>
+              <a href={bot.link_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 text-sm text-gold-300 underline">
+                <FileText className="h-4 w-4" /> Open bot information
+              </a>
+            </section>
+          )}
         </div>
       </section>
-
-      {/* Content Section */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-3 gap-12">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-12">
-              {/* Features */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="dark-card p-8"
-              >
-                <h2 className="text-2xl font-bold mb-6">Key Features</h2>
-                <div className="space-y-4">
-                  <div className="flex items-start">
-                    <Zap className="w-6 h-6 text-gold-400 mr-4 flex-shrink-0 mt-1" />
-                    <div>
-                      <h3 className="font-bold mb-2">Product Information</h3>
-                      <p className="text-gray-400">
-                        Review the product description, delivery method, and setup requirements before purchase.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start">
-                    <Shield className="w-6 h-6 text-gold-400 mr-4 flex-shrink-0 mt-1" />
-                    <div>
-                      <h3 className="font-bold mb-2">Trading Risk</h3>
-                      <p className="text-gray-400">
-                        Automated trading can lose money. No strategy or bot guarantees a profit.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start">
-                    <Settings className="w-6 h-6 text-gold-400 mr-4 flex-shrink-0 mt-1" />
-                    <div>
-                      <h3 className="font-bold mb-2">Highly Customizable</h3>
-                      <p className="text-gray-400">
-                        Adjust parameters to match your trading style and risk tolerance.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start">
-                    <TrendingUp className="w-6 h-6 text-gold-400 mr-4 flex-shrink-0 mt-1" />
-                    <div>
-                      <h3 className="font-bold mb-2">Monitor Your Trading</h3>
-                      <p className="text-gray-400">
-                        Automated tools do not remove market risk. Review settings and monitor your account.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* System Requirements */}
-              {Array.isArray(product.metadata?.requirements) && product.metadata.requirements.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="dark-card p-8"
-                >
-                  <h2 className="text-2xl font-bold mb-6">System Requirements</h2>
-                  <ul className="space-y-3">
-                    {product.metadata.requirements.map((req: string, index: number) => (
-                      <li key={index} className="flex items-start">
-                        <Check className="w-5 h-5 text-gold-400 mr-3 flex-shrink-0 mt-1" />
-                        <span className="text-gray-300">{req}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </motion.div>
-              )}
-
-              {/* Setup Instructions */}
-              {bot?.instructions && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="dark-card p-8"
-                >
-                  <h2 className="text-2xl font-bold mb-6">Setup Instructions</h2>
-                  <div className="prose prose-invert max-w-none">
-                    <p className="text-gray-300 whitespace-pre-line">
-                      {bot.instructions}
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-
-              {bot?.link_url && hasAccess && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="dark-card p-8"
-                >
-                  <h2 className="text-2xl font-bold mb-6">Bot Link</h2>
-                  <a href={bot.link_url} target="_blank" rel="noreferrer" className="text-gold-400 hover:text-gold-300 break-all">{bot.link_url}</a>
-                </motion.div>
-              )}
-            </div>
-
-            {/* Sidebar */}
-            <div className="lg:col-span-1">
-              <div className="dark-card p-6 sticky top-24 space-y-6">
-                <div>
-                  <h3 className="text-xl font-bold mb-4">Bot Details</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm text-gray-500 mb-1">Platform</p>
-                      <p className="font-medium">{product.metadata?.bot_type || "As described for this product"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500 mb-1">License</p>
-                      <p className="font-medium">Single User</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-dark-800 pt-6">
-                  {product.metadata?.delivery_method === 'manual_email' &&
-                  (deliveryStatus === 'pending_delivery' || deliveryStatus === 'delivered') ? (
-                    <div className="rounded-lg border border-gold-500/30 bg-gold-500/5 p-4 text-sm text-gold-300">
-                      Manual email delivery: {deliveryStatus.replace('_', ' ')}
-                    </div>
-                  ) : !hasAccess ? (
-                    <>
-                      <div className="text-3xl font-bold gold-gradient-text mb-4">
-                        ${product.price}
-                      </div>
-                      <button onClick={handlePurchase} className="gold-button w-full mb-4">
-                        <ShoppingCart className="w-5 h-5 mr-2" />
-                        Purchase Bot
-                      </button>
-                      <div className="space-y-2 text-sm text-gray-400">
-                        <div className="flex items-center">
-                          <Check className="w-4 h-4 mr-2 text-green-400" />
-                          <span>{product.metadata?.delivery_method === "manual_email" ? "Manual email delivery after verified payment" : "Automatic download after verified payment"}</span>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                        <div className="flex items-center text-green-400 mb-2">
-                          <Check className="w-5 h-5 mr-2" />
-                          <span className="font-medium">You own this bot</span>
-                        </div>
-                        <p className="text-sm text-gray-400">Ready to download</p>
-                      </div>
-                      <button
-                        onClick={handleDownload}
-                        disabled={isDownloading}
-                        className="gold-button w-full"
-                      >
-                        <Download className="w-5 h-5 mr-2" />
-                        {isDownloading ? "Downloading..." : "Download Now"}
-                      </button>
-                      {downloadToken && (
-                        <div className="bg-dark-900 rounded-lg p-4">
-                          <p className="text-xs text-gray-500 mb-2">Download Token:</p>
-                          <p className="text-xs font-mono text-gold-400 break-all">
-                            {downloadToken}
-                          </p>
-                          <p className="text-xs text-gray-600 mt-2">
-                            Valid for 24 hours, 3 downloads max
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-dark-800 pt-6">
-                  <h4 className="font-bold mb-3">Need Help?</h4>
-                  <a
-                    href={getSupportGmailUrl(
-                      `Support for ${product?.name || "trading bot"}`,
-                      `Hello Logic Traders support,\n\nI need help with ${product?.name || "this trading bot"}.\n\n`,
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center text-gray-400 hover:text-gold-400 transition-colors"
-                  >
-                    <FileText className="w-5 h-5 mr-2" />
-                    Email Support
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
+    </main>
   );
 }
