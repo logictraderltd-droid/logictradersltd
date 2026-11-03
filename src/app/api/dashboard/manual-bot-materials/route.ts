@@ -36,7 +36,7 @@ export async function GET() {
     const eligibleDeliveries = deliveries.filter((delivery) =>
       eligibleOrders.get(delivery.order_id) === delivery.product_id,
     );
-    const productIds = [...new Set(eligibleDeliveries.map((delivery) => delivery.product_id))];
+    const productIds = Array.from(new Set(eligibleDeliveries.map((delivery) => delivery.product_id)));
     if (!productIds.length) {
       return NextResponse.json({ materials: [] }, { headers: { "Cache-Control": "private, no-store" } });
     }
