@@ -160,18 +160,28 @@ export default function BotsPage() {
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                   className="dark-card overflow-hidden group"
                 >
-                  <div className="p-8">
-                    {/* Header */}
-                    <div className="flex items-start space-x-4 mb-6">
-                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-gold-500/20 to-gold-600/10 flex items-center justify-center group-hover:from-gold-500/30 group-hover:to-gold-600/20 transition-all">
-                        <Bot className="w-8 h-8 text-gold-400" />
+                  <div className="relative aspect-video overflow-hidden bg-dark-900">
+                    {bot.thumbnail_url ? (
+                      <img src={bot.thumbnail_url} alt={bot.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-gold-400/40">
+                        <Bot className="h-14 w-14" />
                       </div>
-                      <div>
-                        <h3 className="text-xl font-bold group-hover:text-gold-400 transition-colors">
-                          {bot.name}
-                        </h3>
-                        <p className="mt-1 min-h-10 line-clamp-2 text-sm text-gray-500">{bot.description}</p>
-                      </div>
+                    )}
+                    <span className="absolute left-3 top-3 border border-gold-500/30 bg-dark-950/85 px-3 py-1 text-xs font-semibold text-gold-200">
+                      {bot.metadata?.bot_type || "Trading Bot"}
+                    </span>
+                  </div>
+
+                  <div className="p-5 sm:p-6">
+                    <div className="mb-4">
+                      <h3 className="text-xl font-bold text-white transition-colors group-hover:text-gold-400">
+                        {bot.name}
+                      </h3>
+                      <p className="mt-1 min-h-10 line-clamp-2 text-sm text-gray-500">{bot.description}</p>
+                      <p className="mt-2 text-xs font-semibold text-gold-300">
+                        Delivery: {bot.metadata?.delivery_method === "manual_email" ? "Manual email delivery" : "Automatic download"}
+                      </p>
                     </div>
 
                     {/* Requirements */}
