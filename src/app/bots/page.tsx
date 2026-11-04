@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Bot, Cpu, Download, Settings, ArrowRight, Check, Zap } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 import { TradingBot } from "@/types";
+import { InlineVideo } from "@/components/InlineVideo";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
@@ -165,7 +166,9 @@ export default function BotsPage() {
                   className="dark-card overflow-hidden group"
                 >
                   <div className="relative aspect-video overflow-hidden bg-dark-900">
-                    {bot.thumbnail_url ? (
+                    {typeof bot.metadata?.demo_video_url === "string" && bot.metadata.demo_video_url ? (
+                      <InlineVideo url={bot.metadata.demo_video_url} title={`${bot.name} demonstration`} poster={bot.thumbnail_url} />
+                    ) : bot.thumbnail_url ? (
                       <img src={bot.thumbnail_url} alt={bot.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-gold-400/40">
