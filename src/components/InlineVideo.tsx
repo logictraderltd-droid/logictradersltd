@@ -29,13 +29,13 @@ function getVideoSource(value: string) {
   }
 }
 
-export function InlineVideo({ url, title }: { url: string; title: string }) {
+export function InlineVideo({ url, title, poster }: { url: string; title: string; poster?: string | null }) {
   const source = getVideoSource(url);
   if (!source) return <p className="text-sm text-gray-500">This video link is not valid.</p>;
 
   if (source.kind === "file") {
     return (
-      <video className="aspect-video w-full bg-black" src={source.src} controls playsInline preload="metadata">
+      <video className="aspect-video w-full bg-black" src={source.src} poster={poster || undefined} controls playsInline preload="metadata">
         Your browser does not support embedded video.
       </video>
     );

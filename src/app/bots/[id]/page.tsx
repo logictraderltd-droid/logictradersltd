@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSupportGmailUrl } from "@/lib/support";
+import { InlineVideo } from "@/components/InlineVideo";
 
 interface BotLink {
   link_url: string;
@@ -202,7 +203,13 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
             <section className="dark-card overflow-hidden">
               <div className="relative aspect-video bg-dark-900">
-                {product.thumbnail_url ? (
+                {typeof product.metadata?.demo_video_url === "string" && product.metadata.demo_video_url ? (
+                  <InlineVideo
+                    url={product.metadata.demo_video_url}
+                    title={`${product.name} demonstration`}
+                    poster={product.thumbnail_url}
+                  />
+                ) : product.thumbnail_url ? (
                   <img src={product.thumbnail_url} alt={product.name} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-gold-400/50">
@@ -217,12 +224,6 @@ export default function BotDetailPage({ params }: { params: { id: string } }) {
               <div className="p-5 sm:p-6">
                 <h1 className="text-xl font-bold text-white sm:text-2xl">{product.name}</h1>
                 <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-400">{product.description}</p>
-
-                {product.metadata?.demo_video_url && (
-                  <a href={product.metadata.demo_video_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm text-gold-300 underline">
-                    Watch bot demonstration
-                  </a>
-                )}
 
                 {Array.isArray(product.metadata?.features) && product.metadata.features.length > 0 && (
                   <div className="mt-5 grid gap-2 sm:grid-cols-2">
